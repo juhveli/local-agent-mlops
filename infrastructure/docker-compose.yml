@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  nornicdb:
+    image: timothyswt/nornicdb-arm64-metal:latest
+    ports:
+      - "7687:7687" # Neo4j Bolt
+      - "7474:7474" # Neo4j HTTP
+      - "8080:8080" # GraphQL
+    volumes:
+      - ./nornic_data:/app/data
+    restart: always
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+    restart: always
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006"
+    restart: always
+
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./infrastructure/searxng:/etc/searxng
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888/
+    restart: always

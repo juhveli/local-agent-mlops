@@ -1,0 +1,14 @@
+openai
+arize-phoenix[otel]
+arize-phoenix[evals]
+python-dotenv
+httpx
+beautifulsoup4
+qdrant-client
+neo4j
+mcp
+fastmcp
+pydantic
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp
