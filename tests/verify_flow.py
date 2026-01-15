@@ -92,7 +92,8 @@ async def mvp_flow_test(storage_ok):
     query = "Quick test: How to boil an egg?"
     try:
         # Limited research for speed
-        answer = await agent.research(query, max_iterations=1)
+        result = await agent.research(query, max_iterations=1)
+        answer = result["answer"]
         print(f"✅ Pass! Agent synthesized answer: {answer[:100]}...")
         return True
     except Exception as e:

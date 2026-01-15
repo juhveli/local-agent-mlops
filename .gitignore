@@ -142,6 +142,7 @@ cython_debug/
 # IDE
 .idea/
 .vscode/
+node_modules/
 
 # Data directories
 nornic_data/

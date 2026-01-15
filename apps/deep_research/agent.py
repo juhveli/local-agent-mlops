@@ -269,13 +269,14 @@ ANSWER:"""
         return answer
 
     @tracer.start_as_current_span("deep_research")
-    async def research(self, query: str, max_iterations: int = 3) -> str:
+    async def research(self, query: str, max_iterations: int = 3) -> Dict[str, Any]:
         """
         Execute iterative deep research:
         1. Decompose query into sub-queries
         2. Search for each sub-query
         3. Check relevance; if poor, refine queries
         4. Synthesize final answer
+        Returns: Dict with keys 'answer' and 'sources'
         """
         span = trace.get_current_span()
         span.set_attribute("research.query", query)
@@ -320,7 +321,10 @@ ANSWER:"""
         
         # Step 5: Synthesize answer
         if not all_sources:
-            return "Unable to find any sources for this query."
+            return {
+                "answer": "Unable to find any sources for this query.",
+                "sources": []
+            }
         
         # Deduplicate by URL
         seen_urls = set()
@@ -330,8 +334,13 @@ ANSWER:"""
                 seen_urls.add(s["url"])
                 unique_sources.append(s)
         
-        answer = self.synthesize(query, unique_sources[:8])
-        return answer
+        final_sources = unique_sources[:8]
+        answer = self.synthesize(query, final_sources)
+        
+        return {
+            "answer": answer,
+            "sources": final_sources
+        }
 
 
 async def main():
@@ -340,10 +349,10 @@ async def main():
     # Research query
     query = "What is the best way to make an omelet in Tomi Björk style?"
     
-    answer = await agent.research(query)
+    result = await agent.research(query)
     
     # Output ONLY the answer
-    print(answer)
+    print(result["answer"])
 
 
 if __name__ == "__main__":

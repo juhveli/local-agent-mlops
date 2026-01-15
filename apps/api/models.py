@@ -1,0 +1,18 @@
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
+
+class ResearchRequest(BaseModel):
+    query: str
+    max_iterations: int = 3
+
+class Source(BaseModel):
+    id: int
+    url: str
+    title: str
+    content: str
+    query: str
+
+class ResearchResponse(BaseModel):
+    answer: str
+    sources: List[Source]
+    trace_id: Optional[str] = None
