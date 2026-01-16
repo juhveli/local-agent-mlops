@@ -362,27 +362,45 @@ ANSWER:"""
         for iteration in range(max_iterations):
             span.set_attribute(f"research.iteration_{iteration}_queries", len(queries))
             
-            # Step 2: Search each query
+            # Step 2: Search each query in parallel
+            search_tasks = []
+            new_queries = []
+
             for q in queries:
                 if q in searched_queries:
                     continue
                 searched_queries.add(q)
-                
-                results = self.search_web(
-                    q,
-                    num_results=3,
-                    provider=provider,
-                    search_depth=search_depth,
-                    include_domains=target_domains
+                new_queries.append(q)
+
+                # Pass all quality parameters to the parallel task
+                search_tasks.append(
+                    asyncio.to_thread(
+                        self.search_web,
+                        q,
+                        num_results=3,
+                        provider=provider,
+                        search_depth=search_depth,
+                        include_domains=target_domains
+                    )
                 )
-                for r in results:
-                    r["query"] = q
-                all_sources.extend(results)
+
+            if search_tasks:
+                results_list = await asyncio.gather(*search_tasks)
+
+                # Process new results
+                new_sources = []
+                for q, results in zip(new_queries, results_list):
+                    for r in results:
+                        r["query"] = q
+                    new_sources.extend(results)
+
+                all_sources.extend(new_sources)
             
-            # Step 3: Store sources in NornicDB
-            for src in all_sources:
-                if src.get("content"):
-                    self.store_knowledge(src["content"][:5000], {"url": src["url"], "query": query})
+                # Step 3: Store ONLY NEW sources in NornicDB
+                # Optimization: Only process newly found sources to avoid redundant embeddings
+                for src in new_sources:
+                    if src.get("content"):
+                        self.store_knowledge(src["content"][:5000], {"url": src["url"], "query": query})
             
             # Step 4: Check if we have enough relevant sources
             if len(all_sources) >= 5:
