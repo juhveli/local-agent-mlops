@@ -92,6 +92,86 @@ async def clear_chat():
     chat_agent.clear_history()
     return {"status": "ok", "message": "Chat history cleared"}
 
+
+@app.get("/api/memory/graph")
+async def get_memory_graph():
+    """
+    Fetch knowledge graph data for visualization.
+    Returns nodes and links from NornicDB.
+    """
+    from core.nornic_client import NornicClient
+    
+    try:
+        client = NornicClient()
+        
+        nodes = []
+        links = []
+        
+        if client.use_fallback:
+            # Fallback: Load from JSON file
+            import json
+            if os.path.exists(client.fallback_file):
+                with open(client.fallback_file, "r") as f:
+                    data = json.load(f)
+                for i, item in enumerate(data):
+                    nodes.append({
+                        "id": str(i),
+                        "name": item.get("metadata", {}).get("url", f"Document {i}")[:50],
+                        "content": item.get("content", "")[:200],
+                        "group": 1
+                    })
+        else:
+            # Query Neo4j for Document nodes
+            with client.driver.session() as session:
+                result = session.run(
+                    "MATCH (d:Document) RETURN d.id AS id, d.content AS content, d.url AS url LIMIT 100"
+                )
+                for i, record in enumerate(result):
+                    nodes.append({
+                        "id": record["id"] or str(i),
+                        "name": (record["url"] or f"Document {i}")[:50],
+                        "content": (record["content"] or "")[:200],
+                        "group": 1
+                    })
+                
+                # Query relationships
+                rel_result = session.run(
+                    "MATCH (a:Document)-[r]->(b:Document) RETURN a.id AS source, b.id AS target, type(r) AS type LIMIT 200"
+                )
+                for record in rel_result:
+                    links.append({
+                        "source": record["source"],
+                        "target": record["target"],
+                        "type": record["type"]
+                    })
+        
+        # Also fetch from Qdrant if available
+        if client.qdrant and not client.use_fallback:
+            try:
+                scroll_result = client.qdrant.scroll(
+                    collection_name=client.collection_name,
+                    limit=100,
+                    with_payload=True,
+                    with_vectors=False
+                )
+                for point in scroll_result[0]:
+                    payload = point.payload or {}
+                    node_id = str(point.id)
+                    if not any(n["id"] == node_id for n in nodes):
+                        nodes.append({
+                            "id": node_id,
+                            "name": payload.get("url", f"Vector {node_id}")[:50],
+                            "content": payload.get("content", "")[:200],
+                            "group": 2  # Different group for vector-only nodes
+                        })
+            except Exception:
+                pass  # Qdrant might not have data yet
+        
+        return {"nodes": nodes, "links": links}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

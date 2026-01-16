@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import ResearchView from './components/ResearchView';
 import ChatInterface from './components/ChatInterface';
-import { LayoutDashboard, MessageSquare } from 'lucide-react';
+import MemoryView from './components/MemoryView';
+import { LayoutDashboard, MessageSquare, Database } from 'lucide-react';
 
 function App() {
     const [activeTab, setActiveTab] = useState('research');
@@ -26,7 +27,6 @@ function App() {
                 <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <button
                         onClick={() => setActiveTab('research')}
-                        className={`nav-item ${activeTab === 'research' ? 'active' : ''}`}
                         style={{
                             display: 'flex', alignItems: 'center', gap: '0.75rem',
                             padding: '0.75rem', borderRadius: '8px',
@@ -40,7 +40,6 @@ function App() {
 
                     <button
                         onClick={() => setActiveTab('chat')}
-                        className={`nav-item ${activeTab === 'chat' ? 'active' : ''}`}
                         style={{
                             display: 'flex', alignItems: 'center', gap: '0.75rem',
                             padding: '0.75rem', borderRadius: '8px',
@@ -51,17 +50,33 @@ function App() {
                         <MessageSquare size={20} />
                         Graph Chat
                     </button>
+
+                    <button
+                        onClick={() => setActiveTab('memory')}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '0.75rem',
+                            padding: '0.75rem', borderRadius: '8px',
+                            background: activeTab === 'memory' ? 'var(--bg-primary)' : 'transparent',
+                            border: 'none', color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left'
+                        }}
+                    >
+                        <Database size={20} />
+                        Memory Graph
+                    </button>
                 </nav>
             </aside>
 
-            {/* Main Content - Both components always mounted, visibility controlled by CSS */}
+            {/* Main Content - All components always mounted, visibility controlled by CSS */}
             <main style={{ flex: 1, overflow: 'auto', padding: '2rem' }}>
-                <div className="container">
+                <div className="container" style={{ height: '100%' }}>
                     <div style={{ display: activeTab === 'research' ? 'block' : 'none' }}>
                         <ResearchView />
                     </div>
                     <div style={{ display: activeTab === 'chat' ? 'block' : 'none' }}>
                         <ChatInterface />
+                    </div>
+                    <div style={{ display: activeTab === 'memory' ? 'block' : 'none', height: '100%' }}>
+                        <MemoryView />
                     </div>
                 </div>
             </main>
