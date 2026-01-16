@@ -38,6 +38,14 @@ class EmbeddingClient:
         span.set_attribute("embedding.dimension", len(vector))
         return vector
 
+
+def get_embedding(text: str) -> List[float]:
+    """
+    Convenience function to get embedding for a text string.
+    """
+    client = EmbeddingClient()
+    return client.embed(text)
+
 if __name__ == "__main__":
     from core.observability import init_observability
     from opentelemetry import trace

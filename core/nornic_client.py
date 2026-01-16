@@ -109,12 +109,19 @@ class NornicClient:
         Performs vector search in Qdrant. 
         Note: In a full GraphRAG, this would also query Neo4j for related nodes.
         """
-        results = self.qdrant.search(
-            collection_name=self.collection_name,
-            query_vector=vector,
-            limit=limit
-        )
-        return [hit.payload for hit in results]
+        if self.use_fallback or self.qdrant is None:
+            return []
+
+        try:
+            results = self.qdrant.query_points(
+                collection_name=self.collection_name,
+                query=vector,
+                limit=limit
+            )
+            return [point.payload for point in results.points]
+        except Exception as e:
+            print(f"[Warning] Qdrant search failed: {e}")
+            return []
 
     def close(self):
         self.driver.close()
