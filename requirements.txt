@@ -12,3 +12,4 @@ pydantic
 opentelemetry-api
 opentelemetry-sdk
 opentelemetry-exporter-otlp
+tavily-python
