@@ -19,7 +19,7 @@ class ChatAgent:
     """
     A conversational agent that grounds responses in knowledge from NornicDB.
     """
-    
+
     def __init__(self):
         self.conversation_history: List[Dict[str, str]] = []
         self.nornic = NornicClient()
@@ -33,7 +33,7 @@ Be concise and helpful. Format responses in Markdown when appropriate."""
         """Retrieve relevant documents from NornicDB based on the query."""
         span = trace.get_current_span()
         span.set_attribute("chat.query", query)
-        
+
         if self.nornic.use_fallback:
             # Fallback: load from JSON file
             import json
@@ -42,11 +42,11 @@ Be concise and helpful. Format responses in Markdown when appropriate."""
                     data = json.load(f)
                 return data[:limit]
             return []
-        
+
         # Embed query and search
         query_vector = get_embedding(query)
         results = self.nornic.hybrid_search(query_vector, limit=limit)
-        
+
         span.set_attribute("chat.retrieved_count", len(results))
         return results
 
@@ -102,9 +102,9 @@ if __name__ == "__main__":
     # Test the chat agent
     from core.observability import init_observability
     init_observability("chat-agent-test")
-    
+
     agent = ChatAgent()
-    
+
     # Simulate a conversation
     print("ChatAgent initialized. Type 'quit' to exit.\n")
     while True:

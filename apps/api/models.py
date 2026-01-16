@@ -4,6 +4,9 @@ from typing import List, Optional, Dict, Any
 class ResearchRequest(BaseModel):
     query: str
     max_iterations: int = 3
+    provider: str = "tavily"
+    search_depth: str = "basic"
+    include_domains: List[str] = []
 
 class Source(BaseModel):
     id: int

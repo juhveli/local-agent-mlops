@@ -40,7 +40,13 @@ async def run_research(request: ResearchRequest):
         # to the internal intermediate state without refactoring, we'll return the text answer.
         # Future improvement: Refactor agent.research to return (answer, sources) tuple.
         
-        result = await agent.research(request.query, max_iterations=request.max_iterations)
+        result = await agent.research(
+            request.query,
+            max_iterations=request.max_iterations,
+            provider=request.provider,
+            search_depth=request.search_depth,
+            include_domains=request.include_domains
+        )
         
         # Map raw source dicts to Source model
         sources_list = []

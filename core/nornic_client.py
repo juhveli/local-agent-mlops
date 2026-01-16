@@ -111,7 +111,7 @@ class NornicClient:
         """
         if self.use_fallback or self.qdrant is None:
             return []
-        
+
         try:
             results = self.qdrant.query_points(
                 collection_name=self.collection_name,

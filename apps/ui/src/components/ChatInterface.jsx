@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot, Trash2, Loader2 } from 'lucide-react';
+import { Send, User, Bot, Paperclip, Settings, Globe, Trash2, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 
@@ -9,6 +9,14 @@ const ChatInterface = () => {
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // Search Settings
+    const [showSettings, setShowSettings] = useState(false);
+    const [useWebSearch, setUseWebSearch] = useState(false);
+    const [provider, setProvider] = useState('tavily');
+    const [searchDepth, setSearchDepth] = useState('basic');
+    const [highAuthorityOnly, setHighAuthorityOnly] = useState(false);
+
     const messagesEndRef = useRef(null);
 
     const scrollToBottom = () => {
@@ -28,23 +36,73 @@ const ChatInterface = () => {
         setInput('');
         setLoading(true);
 
-        try {
-            const response = await axios.post('/api/chat', { message: input });
-            setMessages(prev => [...prev, {
-                id: Date.now() + 1,
-                role: 'assistant',
-                content: response.data.message,
-                sourcesUsed: response.data.sources_used
-            }]);
-        } catch (error) {
-            console.error('Chat error:', error);
-            setMessages(prev => [...prev, {
-                id: Date.now() + 1,
-                role: 'assistant',
-                content: 'Sorry, I encountered an error. Please try again.'
-            }]);
-        } finally {
-            setLoading(false);
+        if (useWebSearch) {
+             setLoading(true);
+             const assistantMsgId = Date.now() + 1;
+             setMessages(prev => [...prev, { id: assistantMsgId, role: 'assistant', content: 'Searching web...' }]);
+
+             try {
+                const payload = {
+                    query: userMsg.content,
+                    max_iterations: 1, // Keep it fast for chat
+                    provider,
+                    search_depth: searchDepth,
+                    include_domains: highAuthorityOnly ? ["HIGH_AUTHORITY"] : []
+                };
+                const response = await axios.post('/api/research', payload);
+                const answer = response.data.answer;
+                const sources = response.data.sources;
+
+                const formattedContent = (
+                    <div>
+                        <ReactMarkdown>{answer}</ReactMarkdown>
+                        {sources && sources.length > 0 && (
+                             <div style={{ marginTop: '1rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Sources:</div>
+                                <ul style={{ paddingLeft: '1.2rem', margin: 0 }}>
+                                    {sources.slice(0, 3).map(s => (
+                                        <li key={s.id}>
+                                            <a href={s.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>{s.title}</a>
+                                        </li>
+                                    ))}
+                                </ul>
+                             </div>
+                        )}
+                    </div>
+                );
+
+                setMessages(prev => prev.map(msg =>
+                    msg.id === assistantMsgId ? { ...msg, content: formattedContent } : msg
+                ));
+
+             } catch (error) {
+                 console.error(error);
+                 setMessages(prev => prev.map(msg =>
+                    msg.id === assistantMsgId ? { ...msg, content: 'Sorry, I encountered an error while searching.' } : msg
+                ));
+             } finally {
+                 setLoading(false);
+             }
+        } else {
+            setLoading(true);
+            try {
+                const response = await axios.post('/api/chat', { message: input });
+                setMessages(prev => [...prev, {
+                    id: Date.now() + 1,
+                    role: 'assistant',
+                    content: response.data.message,
+                    sourcesUsed: response.data.sources_used
+                }]);
+            } catch (error) {
+                console.error('Chat error:', error);
+                setMessages(prev => [...prev, {
+                    id: Date.now() + 1,
+                    role: 'assistant',
+                    content: 'Sorry, I encountered an error. Please try again.'
+                }]);
+            } finally {
+                setLoading(false);
+            }
         }
     };
 
@@ -117,7 +175,7 @@ const ChatInterface = () => {
                             border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none'
                         }}>
                             {msg.role === 'assistant' ? (
-                                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                typeof msg.content === 'string' ? <ReactMarkdown>{msg.content}</ReactMarkdown> : msg.content
                             ) : (
                                 msg.content
                             )}
@@ -143,13 +201,54 @@ const ChatInterface = () => {
                 <div ref={messagesEndRef} />
             </div>
 
+            {/* Settings Area */}
+            {showSettings && (
+                <div style={{ padding: '1rem', background: 'var(--bg-secondary)', marginBottom: '1rem', borderRadius: '8px', fontSize: '0.9rem' }}>
+                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '0.3rem', color: 'var(--text-secondary)' }}>Provider</label>
+                            <select className="input" value={provider} onChange={(e) => setProvider(e.target.value)} style={{ width: '100%', padding: '0.4rem' }}>
+                                <option value="tavily">Tavily</option>
+                                <option value="duckduckgo">DuckDuckGo</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '0.3rem', color: 'var(--text-secondary)' }}>Depth</label>
+                            <select className="input" value={searchDepth} onChange={(e) => setSearchDepth(e.target.value)} disabled={provider === 'duckduckgo'} style={{ width: '100%', padding: '0.4rem' }}>
+                                <option value="basic">Basic</option>
+                                <option value="advanced">Advanced</option>
+                            </select>
+                        </div>
+                     </div>
+                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={highAuthorityOnly} onChange={(e) => setHighAuthorityOnly(e.target.checked)} />
+                        <span>High Authority Sources Only</span>
+                    </label>
+                </div>
+            )}
+
             {/* Input Area */}
             <form onSubmit={handleSend} className="card" style={{ padding: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <button
+                    type="button"
+                    onClick={() => setShowSettings(!showSettings)}
+                    style={{ background: showSettings ? 'var(--bg-secondary)' : 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.3rem', borderRadius: '4px' }}
+                >
+                    <Settings size={20} />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setUseWebSearch(!useWebSearch)}
+                    style={{ background: useWebSearch ? 'var(--accent)' : 'none', border: 'none', color: useWebSearch ? 'white' : 'var(--text-secondary)', cursor: 'pointer', padding: '0.3rem', borderRadius: '4px' }}
+                    title={useWebSearch ? "Web Search Enabled" : "Enable Web Search"}
+                >
+                    <Globe size={20} />
+                </button>
                 <input
                     type="text"
                     className="input"
                     style={{ border: 'none', background: 'transparent', padding: '0.5rem', flex: 1 }}
-                    placeholder="Ask a question about your knowledge base..."
+                    placeholder={useWebSearch ? "Search the web..." : "Ask a question about your knowledge base..."}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     disabled={loading}
