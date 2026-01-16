@@ -34,6 +34,7 @@ const ChatInterface = () => {
         const userMsg = { id: Date.now(), role: 'user', content: input };
         setMessages(prev => [...prev, userMsg]);
         setInput('');
+        setLoading(true);
 
         if (useWebSearch) {
              setLoading(true);

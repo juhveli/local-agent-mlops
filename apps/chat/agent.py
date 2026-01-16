@@ -57,13 +57,13 @@ Be concise and helpful. Format responses in Markdown when appropriate."""
         """
         span = trace.get_current_span()
         span.set_attribute("chat.user_message", user_message[:200])
-
+        
         # 1. Add user message to history
         self.conversation_history.append({"role": "user", "content": user_message})
-
+        
         # 2. Retrieve relevant context
         context_docs = self._retrieve_context(user_message)
-
+        
         # 3. Build context string
         context_str = ""
         if context_docs:
@@ -75,21 +75,21 @@ Be concise and helpful. Format responses in Markdown when appropriate."""
                 if url:
                     context_str += f"\n   Source: {url}"
             context_str += "\n---\n"
-
+        
         # 4. Build messages for LLM
         messages = [{"role": "system", "content": self.system_prompt + context_str}]
-
+        
         # Include last N turns of conversation for memory
         history_window = self.conversation_history[-10:]  # Keep last 10 messages
         for msg in history_window:
             messages.append(msg)
-
+        
         # 5. Generate response
         response = generate_response(messages)
-
+        
         # 6. Add assistant response to history
         self.conversation_history.append({"role": "assistant", "content": response})
-
+        
         span.set_attribute("chat.response_length", len(response))
         return response
 
