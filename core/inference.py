@@ -58,6 +58,34 @@ class InferenceClient:
             
         return content, thought
 
+
+def generate_response(messages: list, temperature: float = 0.0) -> str:
+    """
+    Simplified helper for chat completion with a list of messages.
+    Returns only the content (no thought extraction).
+    """
+    client = InferenceClient()
+    
+    # Extract system prompt if present
+    system_prompt = "You are a helpful assistant."
+    user_messages = []
+    for msg in messages:
+        if msg["role"] == "system":
+            system_prompt = msg["content"]
+        else:
+            user_messages.append(msg)
+    
+    # For multi-turn, we need to use the raw client
+    all_messages = [{"role": "system", "content": system_prompt}] + user_messages
+    
+    response = client.client.chat.completions.create(
+        model=client.model_name,
+        messages=all_messages,
+        temperature=temperature
+    )
+    
+    return response.choices[0].message.content
+
 if __name__ == "__main__":
     from core.observability import init_observability
     from opentelemetry import trace

@@ -9,7 +9,8 @@ from sse_starlette.sse import EventSourceResponse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from apps.deep_research.agent import DeepResearchAgent
-from apps.api.models import ResearchRequest, ResearchResponse
+from apps.chat.agent import ChatAgent
+from apps.api.models import ResearchRequest, ResearchResponse, ChatRequest, ChatResponse
 
 app = FastAPI(title="Local Agent MLOps API")
 
@@ -59,6 +60,31 @@ async def run_research(request: ResearchRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Chat agent instance (shared for conversation memory)
+chat_agent = ChatAgent()
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    Send a message to the GraphRAG chat agent.
+    """
+    try:
+        response = chat_agent.chat(request.message)
+        return ChatResponse(
+            message=response,
+            sources_used=len(chat_agent._retrieve_context(request.message, limit=3))
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/clear")
+async def clear_chat():
+    """
+    Clear the chat conversation history.
+    """
+    chat_agent.clear_history()
+    return {"status": "ok", "message": "Chat history cleared"}
 
 if __name__ == "__main__":
     import uvicorn

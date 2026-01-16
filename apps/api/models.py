@@ -16,3 +16,10 @@ class ResearchResponse(BaseModel):
     answer: str
     sources: List[Source]
     trace_id: Optional[str] = None
+
+class ChatRequest(BaseModel):
+    message: str
+
+class ChatResponse(BaseModel):
+    message: str
+    sources_used: int = 0
