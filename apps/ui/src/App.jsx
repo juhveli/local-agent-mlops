@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ResearchView from './components/ResearchView';
 import ChatInterface from './components/ChatInterface';
-import { LayoutDashboard, MessageSquare, Menu } from 'lucide-react';
+import { LayoutDashboard, MessageSquare } from 'lucide-react';
 
 function App() {
     const [activeTab, setActiveTab] = useState('research');
@@ -54,10 +54,15 @@ function App() {
                 </nav>
             </aside>
 
-            {/* Main Content */}
+            {/* Main Content - Both components always mounted, visibility controlled by CSS */}
             <main style={{ flex: 1, overflow: 'auto', padding: '2rem' }}>
                 <div className="container">
-                    {activeTab === 'research' ? <ResearchView /> : <ChatInterface />}
+                    <div style={{ display: activeTab === 'research' ? 'block' : 'none' }}>
+                        <ResearchView />
+                    </div>
+                    <div style={{ display: activeTab === 'chat' ? 'block' : 'none' }}>
+                        <ChatInterface />
+                    </div>
                 </div>
             </main>
         </div>
