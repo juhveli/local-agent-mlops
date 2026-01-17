@@ -148,6 +148,8 @@ async def get_memory_graph():
         # Also fetch from Qdrant if available
         # Note: Deep Research Agent stores to 'research_knowledge_v2' collection
         research_collection = "research_knowledge_v2"
+        node_queries = {}  # Track which query each node came from
+        
         if client.qdrant and not client.use_fallback:
             try:
                 scroll_result = client.qdrant.scroll(
@@ -159,15 +161,76 @@ async def get_memory_graph():
                 for point in scroll_result[0]:
                     payload = point.payload or {}
                     node_id = str(point.id)
+                    query = payload.get("query", "")
+                    url = payload.get("url", "")
+                    
+                    # Extract domain for grouping
+                    domain = ""
+                    if url:
+                        try:
+                            from urllib.parse import urlparse
+                            domain = urlparse(url).netloc
+                        except:
+                            pass
+                    
                     if not any(n["id"] == node_id for n in nodes):
                         nodes.append({
                             "id": node_id,
-                            "name": payload.get("url", f"Vector {node_id}")[:50],
+                            "name": url[:50] if url else f"Vector {node_id}",
                             "content": payload.get("content", "")[:200],
-                            "group": 2  # Different group for vector-only nodes
+                            "query": query,
+                            "domain": domain,
+                            "group": 2
                         })
+                        node_queries[node_id] = query
             except Exception:
                 pass  # Qdrant might not have data yet
+        
+        # Generate links based on shared queries and domain similarity
+        from collections import defaultdict
+        
+        # Group nodes by query
+        query_to_nodes = defaultdict(list)
+        for node in nodes:
+            q = node.get("query", "")
+            if q:
+                query_to_nodes[q].append(node["id"])
+        
+        # Create links between nodes from the same query
+        link_set = set()
+        for query, node_ids in query_to_nodes.items():
+            for i, source in enumerate(node_ids):
+                for target in node_ids[i+1:]:
+                    link_key = tuple(sorted([source, target]))
+                    if link_key not in link_set:
+                        links.append({
+                            "source": source,
+                            "target": target,
+                            "type": "same_query",
+                            "value": 1
+                        })
+                        link_set.add(link_key)
+        
+        # Also link nodes from the same domain
+        domain_to_nodes = defaultdict(list)
+        for node in nodes:
+            d = node.get("domain", "")
+            if d:
+                domain_to_nodes[d].append(node["id"])
+        
+        for domain, node_ids in domain_to_nodes.items():
+            if len(node_ids) > 1 and len(node_ids) <= 20:  # Skip very common domains
+                for i, source in enumerate(node_ids):
+                    for target in node_ids[i+1:]:
+                        link_key = tuple(sorted([source, target]))
+                        if link_key not in link_set:
+                            links.append({
+                                "source": source,
+                                "target": target,
+                                "type": "same_domain",
+                                "value": 0.5
+                            })
+                            link_set.add(link_key)
         
         return {"nodes": nodes, "links": links}
     except Exception as e:

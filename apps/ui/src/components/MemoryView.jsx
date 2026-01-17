@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Database, RefreshCw, Loader2, Info, ZoomIn, ZoomOut } from 'lucide-react';
+import { Database, RefreshCw, Loader2, Info, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import axios from 'axios';
-import ForceGraph2D from 'react-force-graph-2d';
+import ForceGraph3D from 'react-force-graph-3d';
 
 const MemoryView = () => {
     const [graphData, setGraphData] = useState({ nodes: [], links: [] });
@@ -23,8 +23,6 @@ const MemoryView = () => {
 
         updateDimensions();
         window.addEventListener('resize', updateDimensions);
-
-        // Also update after a short delay to ensure container is rendered
         const timer = setTimeout(updateDimensions, 100);
 
         return () => {
@@ -54,29 +52,51 @@ const MemoryView = () => {
 
     const handleNodeClick = useCallback((node) => {
         setSelectedNode(node);
-        // Center on node
+        // Focus camera on node
         if (graphRef.current) {
-            graphRef.current.centerAt(node.x, node.y, 500);
-            graphRef.current.zoom(2, 500);
+            const distance = 100;
+            const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
+            graphRef.current.cameraPosition(
+                { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
+                node,
+                1500
+            );
         }
     }, []);
 
     const handleZoomIn = () => {
         if (graphRef.current) {
-            graphRef.current.zoom(graphRef.current.zoom() * 1.5, 300);
+            const camera = graphRef.current.camera();
+            camera.zoom = (camera.zoom || 1) * 1.3;
+            camera.updateProjectionMatrix();
         }
     };
 
     const handleZoomOut = () => {
         if (graphRef.current) {
-            graphRef.current.zoom(graphRef.current.zoom() / 1.5, 300);
+            const camera = graphRef.current.camera();
+            camera.zoom = (camera.zoom || 1) / 1.3;
+            camera.updateProjectionMatrix();
         }
     };
 
-    const handleCenterGraph = () => {
+    const handleResetView = () => {
         if (graphRef.current) {
-            graphRef.current.zoomToFit(400, 50);
+            graphRef.current.cameraPosition({ x: 0, y: 0, z: 500 }, null, 1000);
         }
+    };
+
+    // Custom node color based on group
+    const getNodeColor = (node) => {
+        if (node.group === 1) return '#3b82f6'; // Blue for Neo4j nodes
+        return '#8b5cf6'; // Purple for Qdrant nodes
+    };
+
+    // Custom link color based on type
+    const getLinkColor = (link) => {
+        if (link.type === 'same_query') return 'rgba(59, 130, 246, 0.6)'; // Blue
+        if (link.type === 'same_domain') return 'rgba(139, 92, 246, 0.4)'; // Purple
+        return 'rgba(255, 255, 255, 0.2)';
     };
 
     return (
@@ -86,9 +106,10 @@ const MemoryView = () => {
                     <h2 style={{ fontSize: '1.5rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <Database size={24} color="#3b82f6" />
                         Memory Graph
+                        <span style={{ fontSize: '0.75rem', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', padding: '0.25rem 0.5rem', borderRadius: '4px', fontWeight: 'normal' }}>3D</span>
                     </h2>
                     <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.9rem' }}>
-                        Visualize your NornicDB knowledge graph • {graphData.nodes.length} nodes
+                        {graphData.nodes.length} nodes • {graphData.links.length} connections
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -98,8 +119,8 @@ const MemoryView = () => {
                     <button onClick={handleZoomOut} title="Zoom Out" style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)' }}>
                         <ZoomOut size={18} />
                     </button>
-                    <button onClick={handleCenterGraph} title="Fit to View" style={{ padding: '0.5rem 1rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.85rem' }}>
-                        Fit
+                    <button onClick={handleResetView} title="Reset View" style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                        <RotateCcw size={18} />
                     </button>
                     <button onClick={fetchGraph} disabled={loading} className="btn" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem' }}>
                         {loading ? <Loader2 size={18} className="spin" /> : <RefreshCw size={18} />}
@@ -113,31 +134,29 @@ const MemoryView = () => {
                 <div
                     ref={containerRef}
                     className="card"
-                    style={{ flex: 1, position: 'relative', overflow: 'hidden', padding: 0, background: '#0a0a0a' }}
+                    style={{ flex: 1, position: 'relative', overflow: 'hidden', padding: 0, background: '#050510' }}
                 >
                     {loading && (
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(10,10,10,0.9)', zIndex: 10 }}>
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5,5,16,0.9)', zIndex: 10 }}>
                             <div style={{ textAlign: 'center' }}>
                                 <Loader2 size={48} className="spin" style={{ marginBottom: '1rem' }} />
-                                <p>Loading knowledge graph...</p>
+                                <p>Loading 3D knowledge graph...</p>
                             </div>
                         </div>
                     )}
 
                     {error && !loading && (
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a' }}>
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050510' }}>
                             <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
                                 <Database size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
                                 <p>{error}</p>
-                                <button onClick={fetchGraph} className="btn" style={{ marginTop: '1rem' }}>
-                                    Retry
-                                </button>
+                                <button onClick={fetchGraph} className="btn" style={{ marginTop: '1rem' }}>Retry</button>
                             </div>
                         </div>
                     )}
 
                     {!loading && !error && graphData.nodes.length === 0 && (
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a' }}>
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050510' }}>
                             <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
                                 <Database size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
                                 <p>No data in knowledge graph yet.</p>
@@ -147,26 +166,47 @@ const MemoryView = () => {
                     )}
 
                     {!loading && !error && graphData.nodes.length > 0 && dimensions.width > 0 && (
-                        <ForceGraph2D
+                        <ForceGraph3D
                             ref={graphRef}
                             graphData={graphData}
                             width={dimensions.width}
                             height={dimensions.height}
-                            nodeLabel={(node) => `${node.name}\n${node.content?.substring(0, 100)}...`}
-                            nodeColor={(node) => node.group === 1 ? '#3b82f6' : '#8b5cf6'}
-                            nodeRelSize={6}
-                            nodeVal={3}
-                            linkColor={() => 'rgba(255,255,255,0.3)'}
-                            linkWidth={1}
-                            backgroundColor="#0a0a0a"
+                            nodeLabel={(node) => `${node.name}\n${node.content?.substring(0, 80)}...`}
+                            nodeColor={getNodeColor}
+                            nodeOpacity={0.9}
+                            nodeResolution={16}
+                            linkColor={getLinkColor}
+                            linkWidth={(link) => link.type === 'same_query' ? 2 : 1}
+                            linkOpacity={0.6}
+                            backgroundColor="#050510"
                             onNodeClick={handleNodeClick}
-                            cooldownTicks={100}
-                            onEngineStop={() => {
-                                if (graphRef.current) {
-                                    graphRef.current.zoomToFit(400, 50);
-                                }
-                            }}
+                            showNavInfo={false}
+                            enableNodeDrag={true}
+                            enableNavigationControls={true}
+                            controlType="orbit"
                         />
+                    )}
+
+                    {/* Legend */}
+                    {!loading && !error && graphData.nodes.length > 0 && (
+                        <div style={{ position: 'absolute', bottom: '1rem', left: '1rem', background: 'rgba(0,0,0,0.7)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.8rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#3b82f6' }}></div>
+                                <span>Neo4j Nodes</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#8b5cf6' }}></div>
+                                <span>Vector Memory</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                <div style={{ width: 20, height: 2, background: 'rgba(59, 130, 246, 0.8)' }}></div>
+                                <span>Same Query</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div style={{ width: 20, height: 1, background: 'rgba(139, 92, 246, 0.6)' }}></div>
+                                <span>Same Domain</span>
+                            </div>
+                        </div>
                     )}
                 </div>
 
@@ -180,14 +220,20 @@ const MemoryView = () => {
                         <div style={{ fontSize: '0.9rem' }}>
                             <div style={{ marginBottom: '1rem' }}>
                                 <div style={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>ID</div>
-                                <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', wordBreak: 'break-all' }}>{selectedNode.id}</div>
+                                <div style={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all', background: 'var(--bg-secondary)', padding: '0.5rem', borderRadius: '4px' }}>{selectedNode.id}</div>
                             </div>
                             <div style={{ marginBottom: '1rem' }}>
                                 <div style={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Source URL</div>
-                                <a href={selectedNode.name.startsWith('http') ? selectedNode.name : `https://${selectedNode.name}`} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', wordBreak: 'break-all' }}>
+                                <a href={selectedNode.name?.startsWith('http') ? selectedNode.name : `https://${selectedNode.name}`} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', wordBreak: 'break-all', fontSize: '0.85rem' }}>
                                     {selectedNode.name}
                                 </a>
                             </div>
+                            {selectedNode.query && (
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <div style={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Query</div>
+                                    <div style={{ fontSize: '0.85rem', fontStyle: 'italic' }}>"{selectedNode.query}"</div>
+                                </div>
+                            )}
                             {selectedNode.content && (
                                 <div>
                                     <div style={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Content Preview</div>
