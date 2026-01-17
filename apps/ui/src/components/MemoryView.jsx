@@ -1,24 +1,36 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Database, RefreshCw, Loader2, Info, ZoomIn, ZoomOut } from 'lucide-react';
 import axios from 'axios';
-
-// Dynamic import for ForceGraph2D (it's a client-side only component)
-let ForceGraph2D = null;
+import ForceGraph2D from 'react-force-graph-2d';
 
 const MemoryView = () => {
     const [graphData, setGraphData] = useState({ nodes: [], links: [] });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedNode, setSelectedNode] = useState(null);
-    const [graphLoaded, setGraphLoaded] = useState(false);
+    const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+    const containerRef = useRef(null);
     const graphRef = useRef();
 
-    // Dynamically import ForceGraph2D on client side
+    // Handle container resize
     useEffect(() => {
-        import('react-force-graph').then((module) => {
-            ForceGraph2D = module.ForceGraph2D;
-            setGraphLoaded(true);
-        });
+        const updateDimensions = () => {
+            if (containerRef.current) {
+                const rect = containerRef.current.getBoundingClientRect();
+                setDimensions({ width: rect.width || 800, height: rect.height || 600 });
+            }
+        };
+
+        updateDimensions();
+        window.addEventListener('resize', updateDimensions);
+
+        // Also update after a short delay to ensure container is rendered
+        const timer = setTimeout(updateDimensions, 100);
+
+        return () => {
+            window.removeEventListener('resize', updateDimensions);
+            clearTimeout(timer);
+        };
     }, []);
 
     const fetchGraph = useCallback(async () => {
@@ -26,6 +38,7 @@ const MemoryView = () => {
         setError(null);
         try {
             const response = await axios.get('/api/memory/graph');
+            console.log('Graph data received:', response.data);
             setGraphData(response.data);
         } catch (err) {
             console.error('Failed to fetch graph:', err);
@@ -41,6 +54,11 @@ const MemoryView = () => {
 
     const handleNodeClick = useCallback((node) => {
         setSelectedNode(node);
+        // Center on node
+        if (graphRef.current) {
+            graphRef.current.centerAt(node.x, node.y, 500);
+            graphRef.current.zoom(2, 500);
+        }
     }, []);
 
     const handleZoomIn = () => {
@@ -55,8 +73,14 @@ const MemoryView = () => {
         }
     };
 
+    const handleCenterGraph = () => {
+        if (graphRef.current) {
+            graphRef.current.zoomToFit(400, 50);
+        }
+    };
+
     return (
-        <div style={{ maxWidth: '100%', margin: '0 auto', height: 'calc(100vh - 4rem)' }}>
+        <div style={{ maxWidth: '100%', margin: '0 auto', height: 'calc(100vh - 4rem)', display: 'flex', flexDirection: 'column' }}>
             <header style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     <h2 style={{ fontSize: '1.5rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -64,37 +88,44 @@ const MemoryView = () => {
                         Memory Graph
                     </h2>
                     <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.9rem' }}>
-                        Visualize your NornicDB knowledge graph
+                        Visualize your NornicDB knowledge graph • {graphData.nodes.length} nodes
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button onClick={handleZoomIn} className="btn-secondary" style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer' }}>
+                    <button onClick={handleZoomIn} title="Zoom In" style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)' }}>
                         <ZoomIn size={18} />
                     </button>
-                    <button onClick={handleZoomOut} className="btn-secondary" style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer' }}>
+                    <button onClick={handleZoomOut} title="Zoom Out" style={{ padding: '0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)' }}>
                         <ZoomOut size={18} />
                     </button>
+                    <button onClick={handleCenterGraph} title="Fit to View" style={{ padding: '0.5rem 1rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.85rem' }}>
+                        Fit
+                    </button>
                     <button onClick={fetchGraph} disabled={loading} className="btn" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem' }}>
-                        {loading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={18} />}
+                        {loading ? <Loader2 size={18} className="spin" /> : <RefreshCw size={18} />}
                         Refresh
                     </button>
                 </div>
             </header>
 
-            <div style={{ display: 'flex', gap: '1rem', height: 'calc(100% - 4rem)' }}>
+            <div style={{ display: 'flex', gap: '1rem', flex: 1, minHeight: 0 }}>
                 {/* Graph Container */}
-                <div className="card" style={{ flex: 1, position: 'relative', overflow: 'hidden', padding: 0 }}>
+                <div
+                    ref={containerRef}
+                    className="card"
+                    style={{ flex: 1, position: 'relative', overflow: 'hidden', padding: 0, background: '#0a0a0a' }}
+                >
                     {loading && (
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)', zIndex: 10 }}>
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(10,10,10,0.9)', zIndex: 10 }}>
                             <div style={{ textAlign: 'center' }}>
-                                <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', marginBottom: '1rem' }} />
+                                <Loader2 size={48} className="spin" style={{ marginBottom: '1rem' }} />
                                 <p>Loading knowledge graph...</p>
                             </div>
                         </div>
                     )}
 
-                    {error && (
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
+                    {error && !loading && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a' }}>
                             <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
                                 <Database size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
                                 <p>{error}</p>
@@ -106,7 +137,7 @@ const MemoryView = () => {
                     )}
 
                     {!loading && !error && graphData.nodes.length === 0 && (
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a' }}>
                             <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
                                 <Database size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
                                 <p>No data in knowledge graph yet.</p>
@@ -115,30 +146,24 @@ const MemoryView = () => {
                         </div>
                     )}
 
-                    {graphLoaded && ForceGraph2D && !loading && !error && graphData.nodes.length > 0 && (
+                    {!loading && !error && graphData.nodes.length > 0 && dimensions.width > 0 && (
                         <ForceGraph2D
                             ref={graphRef}
                             graphData={graphData}
-                            nodeLabel="name"
+                            width={dimensions.width}
+                            height={dimensions.height}
+                            nodeLabel={(node) => `${node.name}\n${node.content?.substring(0, 100)}...`}
                             nodeColor={(node) => node.group === 1 ? '#3b82f6' : '#8b5cf6'}
                             nodeRelSize={6}
-                            linkColor={() => 'rgba(255,255,255,0.2)'}
+                            nodeVal={3}
+                            linkColor={() => 'rgba(255,255,255,0.3)'}
                             linkWidth={1}
                             backgroundColor="#0a0a0a"
                             onNodeClick={handleNodeClick}
-                            nodeCanvasObject={(node, ctx, globalScale) => {
-                                const label = node.name || node.id;
-                                const fontSize = 12 / globalScale;
-                                ctx.font = `${fontSize}px Inter, sans-serif`;
-                                ctx.fillStyle = node.group === 1 ? '#3b82f6' : '#8b5cf6';
-                                ctx.beginPath();
-                                ctx.arc(node.x, node.y, 5, 0, 2 * Math.PI, false);
-                                ctx.fill();
-                                ctx.fillStyle = '#ededed';
-                                ctx.textAlign = 'center';
-                                ctx.textBaseline = 'middle';
-                                if (globalScale > 0.5) {
-                                    ctx.fillText(label.substring(0, 20), node.x, node.y + 12);
+                            cooldownTicks={100}
+                            onEngineStop={() => {
+                                if (graphRef.current) {
+                                    graphRef.current.zoomToFit(400, 50);
                                 }
                             }}
                         />
@@ -147,7 +172,7 @@ const MemoryView = () => {
 
                 {/* Details Panel */}
                 {selectedNode && (
-                    <div className="card" style={{ width: '300px', overflow: 'auto' }}>
+                    <div className="card" style={{ width: '300px', overflow: 'auto', flexShrink: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
                             <Info size={20} color="#3b82f6" />
                             <h3 style={{ margin: 0 }}>Node Details</h3>
@@ -158,8 +183,10 @@ const MemoryView = () => {
                                 <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', wordBreak: 'break-all' }}>{selectedNode.id}</div>
                             </div>
                             <div style={{ marginBottom: '1rem' }}>
-                                <div style={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Name</div>
-                                <div>{selectedNode.name}</div>
+                                <div style={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Source URL</div>
+                                <a href={selectedNode.name.startsWith('http') ? selectedNode.name : `https://${selectedNode.name}`} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', wordBreak: 'break-all' }}>
+                                    {selectedNode.name}
+                                </a>
                             </div>
                             {selectedNode.content && (
                                 <div>
@@ -174,6 +201,7 @@ const MemoryView = () => {
 
             <style>{`
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
       `}</style>
         </div>
     );
