@@ -146,10 +146,12 @@ async def get_memory_graph():
                     })
         
         # Also fetch from Qdrant if available
+        # Note: Deep Research Agent stores to 'research_knowledge_v2' collection
+        research_collection = "research_knowledge_v2"
         if client.qdrant and not client.use_fallback:
             try:
                 scroll_result = client.qdrant.scroll(
-                    collection_name=client.collection_name,
+                    collection_name=research_collection,
                     limit=100,
                     with_payload=True,
                     with_vectors=False
