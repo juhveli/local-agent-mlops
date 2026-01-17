@@ -3,6 +3,49 @@ import { Send, User, Bot, Paperclip, Settings, Globe, Trash2, Loader2 } from 'lu
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 
+const MessageItem = React.memo(({ msg }) => (
+    <div
+        style={{
+            display: 'flex',
+            gap: '1rem',
+            alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+            maxWidth: '80%',
+            flexDirection: msg.role === 'user' ? 'row-reverse' : 'row'
+        }}
+    >
+        <div style={{
+            width: '32px', height: '32px',
+            borderRadius: '50%',
+            background: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0
+        }}>
+            {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+        </div>
+
+        <div style={{
+            background: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
+            padding: '1rem',
+            borderRadius: '12px',
+            borderTopRightRadius: msg.role === 'user' ? '2px' : '12px',
+            borderTopLeftRadius: msg.role === 'assistant' ? '2px' : '12px',
+            border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none'
+        }}>
+            {msg.role === 'assistant' ? (
+                typeof msg.content === 'string' ? <ReactMarkdown>{msg.content}</ReactMarkdown> : msg.content
+            ) : (
+                msg.content
+            )}
+            {msg.sourcesUsed > 0 && (
+                <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    📚 {msg.sourcesUsed} sources used
+                </div>
+            )}
+        </div>
+    </div>
+));
+
 const ChatInterface = () => {
     const [messages, setMessages] = useState([
         { id: 1, role: 'assistant', content: 'Hello! I can help you query the knowledge base. Ask me anything about topics you\'ve researched!' }
@@ -145,47 +188,7 @@ const ChatInterface = () => {
                 marginBottom: '1rem'
             }}>
                 {messages.map((msg) => (
-                    <div
-                        key={msg.id}
-                        style={{
-                            display: 'flex',
-                            gap: '1rem',
-                            alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                            maxWidth: '80%',
-                            flexDirection: msg.role === 'user' ? 'row-reverse' : 'row'
-                        }}
-                    >
-                        <div style={{
-                            width: '32px', height: '32px',
-                            borderRadius: '50%',
-                            background: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
-                            border: '1px solid var(--border)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            flexShrink: 0
-                        }}>
-                            {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
-                        </div>
-
-                        <div style={{
-                            background: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
-                            padding: '1rem',
-                            borderRadius: '12px',
-                            borderTopRightRadius: msg.role === 'user' ? '2px' : '12px',
-                            borderTopLeftRadius: msg.role === 'assistant' ? '2px' : '12px',
-                            border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none'
-                        }}>
-                            {msg.role === 'assistant' ? (
-                                typeof msg.content === 'string' ? <ReactMarkdown>{msg.content}</ReactMarkdown> : msg.content
-                            ) : (
-                                msg.content
-                            )}
-                            {msg.sourcesUsed > 0 && (
-                                <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                    📚 {msg.sourcesUsed} sources used
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    <MessageItem key={msg.id} msg={msg} />
                 ))}
                 {loading && (
                     <div style={{ display: 'flex', gap: '1rem', alignSelf: 'flex-start' }}>
