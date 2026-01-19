@@ -4,6 +4,9 @@ import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
+from collections import defaultdict
+from itertools import combinations
+from urllib.parse import urlparse
 
 # Add root to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -168,7 +171,6 @@ async def get_memory_graph():
                     domain = ""
                     if url:
                         try:
-                            from urllib.parse import urlparse
                             domain = urlparse(url).netloc
                         except:
                             pass
@@ -187,7 +189,6 @@ async def get_memory_graph():
                 pass  # Qdrant might not have data yet
         
         # Generate links based on shared queries and domain similarity
-        from collections import defaultdict
         
         # Group nodes by query
         query_to_nodes = defaultdict(list)
@@ -199,17 +200,20 @@ async def get_memory_graph():
         # Create links between nodes from the same query
         link_set = set()
         for query, node_ids in query_to_nodes.items():
-            for i, source in enumerate(node_ids):
-                for target in node_ids[i+1:]:
-                    link_key = tuple(sorted([source, target]))
-                    if link_key not in link_set:
-                        links.append({
-                            "source": source,
-                            "target": target,
-                            "type": "same_query",
-                            "value": 1
-                        })
-                        link_set.add(link_key)
+            if len(node_ids) < 2:
+                continue
+            # Sort node_ids once to avoid sorting in the inner loop
+            node_ids.sort()
+            for source, target in combinations(node_ids, 2):
+                link_key = (source, target)
+                if link_key not in link_set:
+                    links.append({
+                        "source": source,
+                        "target": target,
+                        "type": "same_query",
+                        "value": 1
+                    })
+                    link_set.add(link_key)
         
         # Also link nodes from the same domain
         domain_to_nodes = defaultdict(list)
@@ -220,17 +224,18 @@ async def get_memory_graph():
         
         for domain, node_ids in domain_to_nodes.items():
             if len(node_ids) > 1 and len(node_ids) <= 20:  # Skip very common domains
-                for i, source in enumerate(node_ids):
-                    for target in node_ids[i+1:]:
-                        link_key = tuple(sorted([source, target]))
-                        if link_key not in link_set:
-                            links.append({
-                                "source": source,
-                                "target": target,
-                                "type": "same_domain",
-                                "value": 0.5
-                            })
-                            link_set.add(link_key)
+                # Sort node_ids once to avoid sorting in the inner loop
+                node_ids.sort()
+                for source, target in combinations(node_ids, 2):
+                    link_key = (source, target)
+                    if link_key not in link_set:
+                        links.append({
+                            "source": source,
+                            "target": target,
+                            "type": "same_domain",
+                            "value": 0.5
+                        })
+                        link_set.add(link_key)
         
         return {"nodes": nodes, "links": links}
     except Exception as e:
