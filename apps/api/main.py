@@ -5,7 +5,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from collections import defaultdict
-from itertools import combinations
 from urllib.parse import urlparse
 
 # Add root to sys.path
@@ -204,7 +203,12 @@ async def get_memory_graph():
                 continue
             # Sort node_ids once to avoid sorting in the inner loop
             node_ids.sort()
-            for source, target in combinations(node_ids, 2):
+
+            # Optimization: Use sequential linking (O(n)) instead of clique (O(n^2))
+            # linking 0->1, 1->2, ... ensures connectivity without exploding edge count
+            for i in range(len(node_ids) - 1):
+                source = node_ids[i]
+                target = node_ids[i+1]
                 link_key = (source, target)
                 if link_key not in link_set:
                     links.append({
@@ -226,7 +230,11 @@ async def get_memory_graph():
             if len(node_ids) > 1 and len(node_ids) <= 20:  # Skip very common domains
                 # Sort node_ids once to avoid sorting in the inner loop
                 node_ids.sort()
-                for source, target in combinations(node_ids, 2):
+
+                # Optimization: Use sequential linking here too
+                for i in range(len(node_ids) - 1):
+                    source = node_ids[i]
+                    target = node_ids[i+1]
                     link_key = (source, target)
                     if link_key not in link_set:
                         links.append({

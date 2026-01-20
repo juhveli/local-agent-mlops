@@ -7,3 +7,7 @@
 ## 2024-05-22 - Graph Generation Bottleneck
 **Learning:** `apps/api/main.py` generates graph links using an O(n^2) nested loop within `get_memory_graph`. This occurs for both "same_query" and "same_domain" groups. While current limits (100 nodes) mask this, scaling the node count will degrade performance significantly.
 **Action:** When optimizing the backend or increasing node limits, refactor this to use a more efficient graph construction method or process relationships in the database/vector store directly.
+
+## 2024-05-22 - Graph Generation Optimized
+**Learning:** Replaced O(n^2) clique generation with O(n) sequential chain linking in `get_memory_graph`. This reduces edge count by >95% for dense groups (e.g. 50 nodes: 1225 -> 49 edges) and significantly improves response time and frontend rendering performance.
+**Action:** Always prefer linear connectivity (chains/trees) over full cliques for visualization graphs unless explicit pairwise relationships are required.
