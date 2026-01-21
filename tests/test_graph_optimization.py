@@ -12,8 +12,8 @@ from apps.api.main import get_memory_graph
 async def test_get_memory_graph_performance_logic():
     print("Testing get_memory_graph logic...")
 
-    with patch('core.nornic_client.NornicClient') as MockClient:
-        client = MockClient.return_value
+    # Patch the global client instance directly
+    with patch('apps.api.main.nornic_client') as client:
         client.use_fallback = False
         client.qdrant = MagicMock()
 
