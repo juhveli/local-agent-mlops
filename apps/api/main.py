@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from apps.deep_research.agent import DeepResearchAgent
 from apps.chat.agent import ChatAgent
 from apps.api.models import ResearchRequest, ResearchResponse, ChatRequest, ChatResponse
+from core.nornic_client import NornicClient
 
 app = FastAPI(title="Local Agent MLOps API")
 
@@ -72,6 +73,9 @@ async def run_research(request: ResearchRequest):
 # Chat agent instance (shared for conversation memory)
 chat_agent = ChatAgent()
 
+# Nornic client instance (shared for database connections)
+nornic_client = NornicClient()
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
@@ -101,15 +105,11 @@ async def get_memory_graph():
     Fetch knowledge graph data for visualization.
     Returns nodes and links from NornicDB.
     """
-    from core.nornic_client import NornicClient
-    
     try:
-        client = NornicClient()
-        
         nodes = []
         links = []
         
-        if client.use_fallback:
+        if nornic_client.use_fallback:
             # Fallback: Load from JSON file
             import json
             if os.path.exists(client.fallback_file):
@@ -124,7 +124,7 @@ async def get_memory_graph():
                     })
         else:
             # Query Neo4j for Document nodes
-            with client.driver.session() as session:
+            with nornic_client.driver.session() as session:
                 result = session.run(
                     "MATCH (d:Document) RETURN d.id AS id, d.content AS content, d.url AS url LIMIT 100"
                 )
@@ -152,9 +152,9 @@ async def get_memory_graph():
         research_collection = "research_knowledge_v2"
         node_queries = {}  # Track which query each node came from
         
-        if client.qdrant and not client.use_fallback:
+        if nornic_client.qdrant and not nornic_client.use_fallback:
             try:
-                scroll_result = client.qdrant.scroll(
+                scroll_result = nornic_client.qdrant.scroll(
                     collection_name=research_collection,
                     limit=100,
                     with_payload=True,
