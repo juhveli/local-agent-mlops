@@ -52,6 +52,8 @@ const ChatInterface = () => {
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef(null);
 
     // Search Settings
     const [showSettings, setShowSettings] = useState(false);
@@ -69,6 +71,52 @@ const ChatInterface = () => {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (file.type !== 'application/pdf') {
+            alert('Please upload a PDF file.');
+            return;
+        }
+
+        if (file.size > 2.5 * 1024 * 1024) {
+            alert('File size exceeds 2.5MB limit.');
+            return;
+        }
+
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const assistantMsgId = Date.now();
+            setMessages(prev => [...prev, {
+                id: assistantMsgId,
+                role: 'assistant',
+                content: `📄 Ingesting **${file.name}**... (This may take a moment using Vision LLM)`
+            }]);
+
+            const response = await axios.post('/api/upload', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            setMessages(prev => prev.map(msg =>
+                msg.id === assistantMsgId
+                ? { ...msg, content: `✅ Successfully ingested **${file.name}**.\n\nExtracted ${response.data.chunks} chunks.` }
+                : msg
+            ));
+        } catch (error) {
+            console.error('Upload error:', error);
+            // Remove the temporary message if failed, or update it
+             setMessages(prev => prev.filter(msg => msg.id !== Date.now())); // Simple cleanup, ideally update to error state
+             alert('Error uploading file: ' + (error.response?.data?.detail || error.message));
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
 
     const handleSend = async (e) => {
         e.preventDefault();
@@ -232,12 +280,28 @@ const ChatInterface = () => {
 
             {/* Input Area */}
             <form onSubmit={handleSend} className="card" style={{ padding: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    style={{ display: 'none' }}
+                    accept="application/pdf"
+                    onChange={handleFileChange}
+                />
                 <button
                     type="button"
                     onClick={() => setShowSettings(!showSettings)}
                     style={{ background: showSettings ? 'var(--bg-secondary)' : 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.3rem', borderRadius: '4px' }}
                 >
                     <Settings size={20} />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    style={{ background: 'none', border: 'none', color: uploading ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', padding: '0.3rem', borderRadius: '4px' }}
+                    title="Upload PDF (max 2.5MB)"
+                >
+                     {uploading ? <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} /> : <Paperclip size={20} />}
                 </button>
                 <button
                     type="button"

@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union, List, Dict
 from openai import OpenAI
 from opentelemetry import trace
 from dotenv import load_dotenv
@@ -21,16 +21,26 @@ class InferenceClient:
         self.model_name = os.getenv("MODEL_NAME", "qwen3-30b-a3b-thinking-2507-mlx")
 
     @tracer.start_as_current_span("llm_completion")
-    def chat(self, prompt: str, system_prompt: str = "You are a helpful research assistant.") -> Tuple[str, Optional[str]]:
+    def chat(self, prompt: Union[str, List[Dict]], system_prompt: str = "You are a helpful research assistant.", model: Optional[str] = None) -> Tuple[str, Optional[str]]:
         """
         Sends a chat completion request and returns (clean_answer, thought).
+
+        Args:
+            prompt: User input string or list of content parts (for multimodal).
+            system_prompt: System instruction.
+            model: Optional override for model name (e.g. for vision tasks).
         """
         span = trace.get_current_span()
-        span.set_attribute("llm.model", self.model_name)
-        span.set_attribute("llm.prompt", prompt)
+        used_model = model or self.model_name
+        span.set_attribute("llm.model", used_model)
+
+        if isinstance(prompt, str):
+            span.set_attribute("llm.prompt", prompt)
+        else:
+            span.set_attribute("llm.prompt", "multimodal_content")
 
         response = self.client.chat.completions.create(
-            model=self.model_name,
+            model=used_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
