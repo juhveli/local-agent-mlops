@@ -16,6 +16,8 @@ from apps.api.models import ResearchRequest, ResearchResponse, ChatRequest, Chat
 from core.nornic_client import NornicClient
 from core.ingestion import PDFIngestor
 
+# TODO: Implement user authentication and session management.
+
 app = FastAPI(title="Local Agent MLOps API")
 
 # Configure CORS for React frontend (Vite defaults to port 5173)
