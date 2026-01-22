@@ -2,8 +2,12 @@ import React, { useState } from 'react';
 import { Search, Loader2, Sparkles, Settings } from 'lucide-react';
 import axios from 'axios';
 import ResearchResult from './ResearchResult';
+import { useToast } from '../context/ToastContext';
+
+// TODO: Implement SSE (Server-Sent Events) for real-time research progress updates in the UI.
 
 const ResearchView = () => {
+    const { toast } = useToast();
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
@@ -13,6 +17,13 @@ const ResearchView = () => {
     const [provider, setProvider] = useState('tavily'); // 'tavily' | 'duckduckgo'
     const [searchDepth, setSearchDepth] = useState('basic'); // 'basic' | 'advanced'
     const [highAuthorityOnly, setHighAuthorityOnly] = useState(false);
+
+    const suggestions = [
+        "Latest AI Agents",
+        "Rust vs Go Performance",
+        "Global Economic Outlook",
+        "Transformer Architecture"
+    ];
 
     const handleSearch = async (e) => {
         e.preventDefault();
@@ -30,9 +41,10 @@ const ResearchView = () => {
             };
             const response = await axios.post('/api/research', payload);
             setResult(response.data);
+            toast.success('Research completed successfully!', 'Success');
         } catch (error) {
             console.error(error);
-            alert('Research failed. Check console.');
+            toast.error(error.response?.data?.detail || 'Research failed. Please try again.', 'Error');
         } finally {
             setLoading(false);
         }
@@ -121,6 +133,34 @@ const ResearchView = () => {
                     )}
                 </form>
             </div>
+
+            {!result && !loading && (
+                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>Suggested Research:</p>
+                    <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        {suggestions.map(s => (
+                            <button
+                                key={s}
+                                onClick={() => setQuery(s)}
+                                style={{
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border)',
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: '20px',
+                                    color: 'var(--text-primary)',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.target.style.borderColor = 'var(--accent)'}
+                                onMouseLeave={(e) => e.target.style.borderColor = 'var(--border)'}
+                            >
+                                {s}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {loading && (
                 <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>

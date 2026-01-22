@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, User, Bot, Paperclip, Settings, Globe, Trash2, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
+import { useToast } from '../context/ToastContext';
 
 const MessageItem = React.memo(({ msg }) => (
     <div
@@ -47,12 +48,14 @@ const MessageItem = React.memo(({ msg }) => (
 ));
 
 const ChatInterface = () => {
+    const { toast } = useToast();
     const [messages, setMessages] = useState([
         { id: 1, role: 'assistant', content: 'Hello! I can help you query the knowledge base. Ask me anything about topics you\'ve researched!' }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef(null);
 
     // Search Settings
@@ -61,6 +64,12 @@ const ChatInterface = () => {
     const [provider, setProvider] = useState('tavily');
     const [searchDepth, setSearchDepth] = useState('basic');
     const [highAuthorityOnly, setHighAuthorityOnly] = useState(false);
+
+    const suggestions = [
+        "Summarize my documents",
+        "What are the key entities?",
+        "Explain the connections found"
+    ];
 
     const messagesEndRef = useRef(null);
 
@@ -72,17 +81,16 @@ const ChatInterface = () => {
         scrollToBottom();
     }, [messages]);
 
-    const handleFileChange = async (e) => {
-        const file = e.target.files[0];
+    const processFile = async (file) => {
         if (!file) return;
 
         if (file.type !== 'application/pdf') {
-            alert('Please upload a PDF file.');
+            toast.error('Please upload a PDF file.', 'Invalid File Type');
             return;
         }
 
         if (file.size > 2.5 * 1024 * 1024) {
-            alert('File size exceeds 2.5MB limit.');
+            toast.error('File size exceeds 2.5MB limit.', 'File Too Large');
             return;
         }
 
@@ -111,11 +119,32 @@ const ChatInterface = () => {
             console.error('Upload error:', error);
             // Remove the temporary message if failed, or update it
              setMessages(prev => prev.filter(msg => msg.id !== Date.now())); // Simple cleanup, ideally update to error state
-             alert('Error uploading file: ' + (error.response?.data?.detail || error.message));
+             toast.error('Error uploading file: ' + (error.response?.data?.detail || error.message), 'Upload Failed');
         } finally {
             setUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
+    };
+
+    const handleFileChange = (e) => {
+        processFile(e.target.files[0]);
+    };
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files[0];
+        processFile(file);
     };
 
     const handleSend = async (e) => {
@@ -168,6 +197,7 @@ const ChatInterface = () => {
 
              } catch (error) {
                  console.error(error);
+                 toast.error('Web search failed. Please try again.', 'Error');
                  setMessages(prev => prev.map(msg =>
                     msg.id === assistantMsgId ? { ...msg, content: 'Sorry, I encountered an error while searching.' } : msg
                 ));
@@ -186,6 +216,7 @@ const ChatInterface = () => {
                 }]);
             } catch (error) {
                 console.error('Chat error:', error);
+                toast.error('Chat failed. Please check backend connection.', 'Error');
                 setMessages(prev => [...prev, {
                     id: Date.now() + 1,
                     role: 'assistant',
@@ -203,13 +234,34 @@ const ChatInterface = () => {
             setMessages([
                 { id: Date.now(), role: 'assistant', content: 'Chat history cleared. How can I help you?' }
             ]);
+            toast.success('Chat history cleared.', 'Success');
         } catch (error) {
             console.error('Clear error:', error);
+            toast.error('Failed to clear chat history.', 'Error');
         }
     };
 
     return (
-        <div style={{ maxWidth: '900px', margin: '0 auto', height: 'calc(100vh - 4rem)', display: 'flex', flexDirection: 'column' }}>
+        <div
+            style={{ maxWidth: '900px', margin: '0 auto', height: 'calc(100vh - 4rem)', display: 'flex', flexDirection: 'column', position: 'relative' }}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
+            {isDragging && (
+                <div style={{
+                    position: 'absolute', inset: 0, background: 'rgba(59, 130, 246, 0.1)',
+                    border: '2px dashed var(--accent)', zIndex: 50, borderRadius: '12px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+                    backdropFilter: 'blur(2px)'
+                }}>
+                    <div style={{ background: 'var(--bg-secondary)', padding: '1.5rem 2.5rem', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', textAlign: 'center' }}>
+                        <Paperclip size={48} style={{ display: 'block', margin: '0 auto 1rem', color: 'var(--accent)' }} />
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: '1.2rem' }}>Drop PDF to Upload</p>
+                    </div>
+                </div>
+            )}
+
             <header style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Graph Chat</h2>
@@ -238,6 +290,30 @@ const ChatInterface = () => {
                 {messages.map((msg) => (
                     <MessageItem key={msg.id} msg={msg} />
                 ))}
+                {messages.length === 1 && (
+                    <div style={{ padding: '0 1rem', marginTop: '1rem' }}>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Quick actions:</p>
+                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                            {suggestions.map(s => (
+                                <button
+                                    key={s}
+                                    onClick={() => setInput(s)}
+                                    style={{
+                                        background: 'var(--bg-secondary)',
+                                        border: '1px solid var(--border)',
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: '20px',
+                                        color: 'var(--text-primary)',
+                                        cursor: 'pointer',
+                                        fontSize: '0.9rem'
+                                    }}
+                                >
+                                    {s}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 {loading && (
                     <div style={{ display: 'flex', gap: '1rem', alignSelf: 'flex-start' }}>
                         <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-secondary)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

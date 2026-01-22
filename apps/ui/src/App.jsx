@@ -4,6 +4,9 @@ import ChatInterface from './components/ChatInterface';
 import MemoryView from './components/MemoryView';
 import { LayoutDashboard, MessageSquare, Database } from 'lucide-react';
 
+// TODO: Add persistent history for research sessions (save/load results).
+// TODO: Add unit tests for frontend components using Vitest/Jest.
+
 function App() {
     const [activeTab, setActiveTab] = useState('research');
 
