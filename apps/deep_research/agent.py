@@ -64,6 +64,10 @@ class DeepResearchAgent:
         self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
         self.embedding_model = os.getenv("EMBEDDING_MODEL", "nomic-embed-text:latest")
         
+        # HTTP Client for Async requests
+        import httpx
+        self.http_client = httpx.AsyncClient(timeout=30.0)
+
         # NornicDB (Qdrant interface) - optional
         self.qdrant = None
         self.collection = "research_knowledge_v2"
@@ -72,15 +76,24 @@ class DeepResearchAgent:
     def _init_qdrant(self):
         """Initialize Qdrant connection with graceful failure."""
         try:
-            from qdrant_client import QdrantClient
+            from qdrant_client import QdrantClient, AsyncQdrantClient
             from qdrant_client.models import VectorParams, Distance
-            self.qdrant = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"), timeout=5)
-            collections = [c.name for c in self.qdrant.get_collections().collections]
-            if self.collection not in collections:
-                self.qdrant.create_collection(
-                    collection_name=self.collection,
-                    vectors_config=VectorParams(size=768, distance=Distance.COSINE)
-                )
+
+            # Use sync client for initial setup/verification
+            sync_client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"), timeout=5)
+            try:
+                collections = [c.name for c in sync_client.get_collections().collections]
+                if self.collection not in collections:
+                    sync_client.create_collection(
+                        collection_name=self.collection,
+                        vectors_config=VectorParams(size=768, distance=Distance.COSINE)
+                    )
+            except Exception as e:
+                # If sync check fails, we might still be able to use async client later if service comes up
+                print(f"[Warning] Qdrant setup check failed: {e}", file=sys.stderr)
+
+            # Use Async client for operations
+            self.qdrant = AsyncQdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"), timeout=5)
         except Exception as e:
             print(f"[Warning] Qdrant unavailable: {e}", file=sys.stderr)
             self.qdrant = None
@@ -197,14 +210,12 @@ Output ONLY a JSON array of search query strings, nothing else. Example: ["query
             return []
 
     @tracer.start_as_current_span("generate_embedding")
-    def embed(self, text: str) -> List[float]:
+    async def embed(self, text: str) -> List[float]:
         """Generate embedding using Ollama."""
-        import httpx
         try:
-            response = httpx.post(
+            response = await self.http_client.post(
                 f"{self.ollama_url}/api/embeddings",
-                json={"model": self.embedding_model, "prompt": text[:2000]},
-                timeout=30.0
+                json={"model": self.embedding_model, "prompt": text[:2000]}
             )
             response.raise_for_status()
             return response.json().get("embedding", [])
@@ -212,7 +223,7 @@ Output ONLY a JSON array of search query strings, nothing else. Example: ["query
             return []
 
     @tracer.start_as_current_span("store_knowledge")
-    def store_knowledge(self, content: str, metadata: Dict[str, Any]):
+    async def store_knowledge(self, content: str, metadata: Dict[str, Any]):
         """Store in NornicDB (Qdrant) if available."""
         span = trace.get_current_span()
         span.set_attribute("storage.content_length", len(content))
@@ -224,9 +235,9 @@ Output ONLY a JSON array of search query strings, nothing else. Example: ["query
         try:
             from qdrant_client.models import PointStruct
             doc_id = hashlib.md5(content.encode()).hexdigest()
-            vector = self.embed(content)
+            vector = await self.embed(content)
             if vector:
-                self.qdrant.upsert(
+                await self.qdrant.upsert(
                     collection_name=self.collection,
                     points=[PointStruct(id=doc_id, vector=vector, payload={"content": content, **metadata})]
                 )
@@ -398,9 +409,15 @@ ANSWER:"""
             
                 # Step 3: Store ONLY NEW sources in NornicDB
                 # Optimization: Only process newly found sources to avoid redundant embeddings
+                store_tasks = []
                 for src in new_sources:
                     if src.get("content"):
-                        self.store_knowledge(src["content"][:5000], {"url": src["url"], "query": query})
+                        store_tasks.append(
+                            self.store_knowledge(src["content"][:5000], {"url": src["url"], "query": query})
+                        )
+
+                if store_tasks:
+                    await asyncio.gather(*store_tasks)
             
             # Step 4: Check if we have enough relevant sources
             if len(all_sources) >= 5:

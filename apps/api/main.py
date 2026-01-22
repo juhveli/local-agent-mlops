@@ -30,20 +30,17 @@ app.add_middleware(
 async def health_check():
     return {"status": "ok", "service": "deep-research-agent"}
 
+# Deep Research Agent instance (shared to reuse clients)
+deep_research_agent = DeepResearchAgent()
+
 @app.post("/api/research", response_model=ResearchResponse)
 async def run_research(request: ResearchRequest):
     """
     Execute a deep research task and return the final answer.
     """
     try:
-        agent = DeepResearchAgent()
-        # Note: The current agent implementation parses sources internally.
-        # Ideally, we would refactor the agent to return structured data.
-        # For this MVP, we will invoke the agent and since we don't have easy access 
-        # to the internal intermediate state without refactoring, we'll return the text answer.
-        # Future improvement: Refactor agent.research to return (answer, sources) tuple.
-        
-        result = await agent.research(
+        # Use shared agent instance
+        result = await deep_research_agent.research(
             request.query,
             max_iterations=request.max_iterations,
             provider=request.provider,
