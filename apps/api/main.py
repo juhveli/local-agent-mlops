@@ -1,7 +1,7 @@
 import sys
 import os
 import asyncio
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from collections import defaultdict
@@ -14,6 +14,7 @@ from apps.deep_research.agent import DeepResearchAgent
 from apps.chat.agent import ChatAgent
 from apps.api.models import ResearchRequest, ResearchResponse, ChatRequest, ChatResponse
 from core.nornic_client import NornicClient
+from core.ingestion import PDFIngestor
 
 app = FastAPI(title="Local Agent MLOps API")
 
@@ -72,6 +73,34 @@ chat_agent = ChatAgent()
 
 # Nornic client instance (shared for database connections)
 nornic_client = NornicClient()
+
+# PDF Ingestor instance
+pdf_ingestor = PDFIngestor()
+
+@app.post("/api/upload")
+def upload_file(file: UploadFile = File(...)):
+    """
+    Upload and process a PDF file using Vision LLM.
+    """
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+
+    # Check size (rough check via seek/tell if possible, or read chunks)
+    # Using read() fits in memory since limit is 2.5MB
+    MAX_SIZE = 2.5 * 1024 * 1024
+
+    try:
+        contents = file.file.read()
+        if len(contents) > MAX_SIZE:
+             raise HTTPException(status_code=400, detail="File too large. Max 2.5MB.")
+
+        chunk_count = pdf_ingestor.process(contents, file.filename)
+        return {"status": "ok", "message": f"Ingested {file.filename}", "chunks": chunk_count}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        file.file.close()
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
