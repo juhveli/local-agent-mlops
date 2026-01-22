@@ -69,12 +69,28 @@ class InferenceClient:
         return content, thought
 
 
+_SHARED_CLIENT: Optional['InferenceClient'] = None
+
+def get_shared_inference_client() -> 'InferenceClient':
+    """
+    Returns a singleton instance of InferenceClient.
+
+    Optimization: Reusing the client instance allows reusing the underlying
+    HTTP connection pool (via httpx), which significantly reduces latency
+    and overhead for high-frequency requests.
+    """
+    global _SHARED_CLIENT
+    if _SHARED_CLIENT is None:
+        _SHARED_CLIENT = InferenceClient()
+    return _SHARED_CLIENT
+
+
 def generate_response(messages: list, temperature: float = 0.0) -> str:
     """
     Simplified helper for chat completion with a list of messages.
     Returns only the content (no thought extraction).
     """
-    client = InferenceClient()
+    client = get_shared_inference_client()
 
     # Extract system prompt if present
     system_prompt = "You are a helpful assistant."

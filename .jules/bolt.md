@@ -11,3 +11,7 @@
 ## 2024-05-22 - Graph Generation Optimized
 **Learning:** Replaced O(n^2) clique generation with O(n) sequential chain linking in `get_memory_graph`. This reduces edge count by >95% for dense groups (e.g. 50 nodes: 1225 -> 49 edges) and significantly improves response time and frontend rendering performance.
 **Action:** Always prefer linear connectivity (chains/trees) over full cliques for visualization graphs unless explicit pairwise relationships are required.
+
+## 2024-05-23 - LLM Client Instantiation Overhead
+**Learning:** The `generate_response` helper in `core/inference.py` was instantiating a new `InferenceClient` (and thus a new `OpenAI`/`httpx` client) for every request. This defeats HTTP connection pooling (keep-alive), causing unnecessary latency from repeated TCP/SSL handshakes.
+**Action:** Implemented a singleton pattern for `InferenceClient` to reuse the underlying connection pool. Always check helper functions for hidden expensive object instantiations.
