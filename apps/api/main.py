@@ -105,7 +105,7 @@ def upload_file(file: UploadFile = File(...)):
         file.file.close()
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+def chat(request: ChatRequest):
     """
     Send a message to the GraphRAG chat agent.
     """
