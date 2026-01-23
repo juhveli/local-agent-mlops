@@ -9,7 +9,7 @@ from typing import List, Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 from opentelemetry import trace
 from tavily import TavilyClient
 from duckduckgo_search import DDGS
@@ -50,8 +50,8 @@ class DeepResearchAgent:
     """
 
     def __init__(self):
-        # LLM Client (LM Studio)
-        self.llm = OpenAI(
+        # LLM Client (LM Studio) - Async for non-blocking operations
+        self.llm = AsyncOpenAI(
             base_url=os.getenv("LM_STUDIO_URL", "http://localhost:1234/v1"),
             api_key="lm-studio"
         )
@@ -99,7 +99,7 @@ class DeepResearchAgent:
             self.qdrant = None
 
     @tracer.start_as_current_span("decompose_query")
-    def decompose_query(self, query: str) -> List[str]:
+    async def decompose_query(self, query: str) -> List[str]:
         """Use LLM to decompose a complex query into multiple search queries."""
         span = trace.get_current_span()
         span.set_attribute("query.original", query)
@@ -116,7 +116,7 @@ USER QUERY: {query}
 
 Output ONLY a JSON array of search query strings, nothing else. Example: ["query 1", "query 2", "query 3"]"""
 
-        response = self.llm.chat.completions.create(
+        response = await self.llm.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3
@@ -250,7 +250,7 @@ Output ONLY a JSON array of search query strings, nothing else. Example: ["query
             print(f"[Error] Storage failed: {e}", file=sys.stderr)
 
     @tracer.start_as_current_span("check_relevance")
-    def check_relevance(self, query: str, sources: List[Dict[str, str]]) -> tuple[bool, str]:
+    async def check_relevance(self, query: str, sources: List[Dict[str, str]]) -> tuple[bool, str]:
         """Check if sources are relevant to the query and suggest refinements if not."""
         span = trace.get_current_span()
         
@@ -271,7 +271,7 @@ Questions:
 
 Output JSON: {{"relevant": true/false, "suggestions": ["query1", "query2"]}}"""
 
-        response = self.llm.chat.completions.create(
+        response = await self.llm.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2
@@ -292,7 +292,7 @@ Output JSON: {{"relevant": true/false, "suggestions": ["query1", "query2"]}}"""
             return True, []  # Assume relevant if parsing fails
 
     @tracer.start_as_current_span("llm_synthesize")
-    def synthesize(self, query: str, sources: List[Dict[str, str]]) -> str:
+    async def synthesize(self, query: str, sources: List[Dict[str, str]]) -> str:
         """Use LLM to synthesize answer from sources."""
         span = trace.get_current_span()
         span.set_attribute("llm.model", self.model)
@@ -327,7 +327,7 @@ Instructions:
 
 ANSWER:"""
 
-        response = self.llm.chat.completions.create(
+        response = await self.llm.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": "You are a helpful research assistant. Always provide substantive, informative answers based on available sources. Never refuse to answer - find the most relevant information possible."},
@@ -368,7 +368,7 @@ ANSWER:"""
              target_domains = HIGH_AUTHORITY_DOMAINS
 
         # Step 1: Decompose query
-        queries = self.decompose_query(query)
+        queries = await self.decompose_query(query)
         
         for iteration in range(max_iterations):
             span.set_attribute(f"research.iteration_{iteration}_queries", len(queries))
@@ -421,7 +421,7 @@ ANSWER:"""
             
             # Step 4: Check if we have enough relevant sources
             if len(all_sources) >= 5:
-                is_relevant, suggestions = self.check_relevance(query, all_sources)
+                is_relevant, suggestions = await self.check_relevance(query, all_sources)
                 if is_relevant or iteration == max_iterations - 1:
                     break
                 # Refine queries for next iteration
@@ -448,7 +448,7 @@ ANSWER:"""
                 unique_sources.append(s)
         
         final_sources = unique_sources[:8]
-        answer = self.synthesize(query, final_sources)
+        answer = await self.synthesize(query, final_sources)
         
         return {
             "answer": answer,
