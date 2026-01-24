@@ -19,3 +19,7 @@
 ## 2024-05-23 - Async Event Loop Blocking
 **Learning:** The `DeepResearchAgent` was calling synchronous LLM methods (`OpenAI` client) inside `async` methods. This blocked the entire asyncio event loop for the duration of the LLM call (seconds), preventing other concurrent tasks (e.g., heartbeats, other API requests) from running.
 **Action:** Refactored `DeepResearchAgent` to use `AsyncOpenAI` and await all LLM calls. Always ensure I/O bound operations in async paths use non-blocking async libraries.
+
+## 2024-05-24 - API Event Loop Starvation
+**Learning:** `apps/api/main.py` defined `chat` and `get_memory_graph` endpoints as `async def` but called synchronous blocking code (`ChatAgent.chat`, `NornicClient` operations). This caused severe event loop starvation, blocking all concurrent requests (like `/health`) while waiting for LLM/DB IO.
+**Action:** Converted these endpoints to standard `def` functions. This instructs FastAPI to execute them in a thread pool, unblocking the main event loop and significantly improving concurrency.

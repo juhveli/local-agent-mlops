@@ -105,11 +105,13 @@ def upload_file(file: UploadFile = File(...)):
         file.file.close()
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+def chat(request: ChatRequest):
     """
     Send a message to the GraphRAG chat agent.
     """
     try:
+        # Optimized: Run as synchronous function in threadpool to avoid blocking event loop
+        # since chat_agent.chat performs blocking I/O
         response = chat_agent.chat(request.message)
         return ChatResponse(
             message=response,
@@ -119,7 +121,7 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/chat/clear")
-async def clear_chat():
+def clear_chat():
     """
     Clear the chat conversation history.
     """
@@ -128,7 +130,7 @@ async def clear_chat():
 
 
 @app.get("/api/memory/graph")
-async def get_memory_graph():
+def get_memory_graph():
     """
     Fetch knowledge graph data for visualization.
     Returns nodes and links from NornicDB.
