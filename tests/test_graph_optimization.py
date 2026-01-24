@@ -7,13 +7,41 @@ from collections import namedtuple
 # Add root to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from apps.api.main import get_memory_graph
+# Ensure modules are mockable
+try:
+    import apps.deep_research.agent
+    import apps.chat.agent
+    import core.nornic_client
+    import core.ingestion
+except ImportError:
+    pass
 
 async def test_get_memory_graph_performance_logic():
     print("Testing get_memory_graph logic...")
 
-    # Patch the global client instance directly
-    with patch('apps.api.main.nornic_client') as client:
+    # Patch the global client instances that are created at module level in main.py
+    # We must patch them BEFORE importing main.py
+    with patch('apps.deep_research.agent.DeepResearchAgent'), \
+         patch('apps.chat.agent.ChatAgent'), \
+         patch('core.nornic_client.NornicClient') as MockNornic, \
+         patch('core.ingestion.PDFIngestor'):
+
+        # Now it is safe to import
+        from apps.api.main import get_memory_graph, nornic_client
+
+        # We need to configure the mocked nornic_client (which is the instance created in main)
+        # However, since we patched the CLASS, nornic_client in main is the return value of the mock class.
+        # But wait, main.py: nornic_client = NornicClient()
+        # So nornic_client is MockNornic.return_value
+
+        # But wait, if main.py was ALREADY imported by another test, this patching might come too late
+        # if we don't reload the module. But pytest typically isolates or we assume fresh process.
+        # Given this is the only test failing on import, likely it wasn't imported yet.
+
+        # To be safe, we access the client from the imported module
+        from apps.api import main
+        client = main.nornic_client
+
         client.use_fallback = False
         client.qdrant = MagicMock()
 
@@ -40,7 +68,7 @@ async def test_get_memory_graph_performance_logic():
         client.qdrant.scroll.return_value = [points, None]
 
         # Now run the function
-        result = await get_memory_graph()
+        result = get_memory_graph()
 
         links = result["links"]
         nodes = result["nodes"]
