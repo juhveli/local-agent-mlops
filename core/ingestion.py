@@ -7,6 +7,7 @@ from core.embeddings import get_embedding
 from core.nornic_client import NornicClient
 from core.observability import get_tracer
 from opentelemetry import trace
+from concurrent.futures import ThreadPoolExecutor
 
 tracer = get_tracer("ingestion")
 
@@ -38,9 +39,16 @@ class PDFIngestor:
         all_text = ""
 
         # 2. Extract content using Vision LLM
-        # TODO: Parallelize this for performance if needed
-        for i, img_b64 in enumerate(images_b64):
-            page_text = self._extract_content(img_b64, i + 1)
+        # Optimization: Parallelize extraction to reduce total latency
+        def process_page_wrapper(args):
+            index, img_b64 = args
+            return self._extract_content(img_b64, index + 1)
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # map maintains the order of results corresponding to the input iterator
+            page_texts = list(executor.map(process_page_wrapper, enumerate(images_b64)))
+
+        for i, page_text in enumerate(page_texts):
             all_text += f"\n\n--- Page {i+1} ---\n\n{page_text}"
 
         # 3. Chunk text
