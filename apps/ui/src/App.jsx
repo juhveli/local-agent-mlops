@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import ResearchView from './components/ResearchView';
-import ChatInterface from './components/ChatInterface';
-import MemoryView from './components/MemoryView';
-import { LayoutDashboard, MessageSquare, Database } from 'lucide-react';
+import React, { useState, Suspense, lazy } from 'react';
+import { LayoutDashboard, MessageSquare, Database, Loader2 } from 'lucide-react';
+
+// Lazy load components to reduce initial bundle size
+const ResearchView = lazy(() => import('./components/ResearchView'));
+const ChatInterface = lazy(() => import('./components/ChatInterface'));
+const MemoryView = lazy(() => import('./components/MemoryView'));
 
 // TODO: Add persistent history for research sessions (save/load results).
 // TODO: Add unit tests for frontend components using Vitest/Jest.
@@ -69,20 +71,38 @@ function App() {
                 </nav>
             </aside>
 
-            {/* Main Content - All components always mounted, visibility controlled by CSS */}
+            {/* Main Content */}
             <main style={{ flex: 1, overflow: 'auto', padding: '2rem' }}>
                 <div className="container" style={{ height: '100%' }}>
-                    <div style={{ display: activeTab === 'research' ? 'block' : 'none' }}>
-                        <ResearchView />
-                    </div>
-                    <div style={{ display: activeTab === 'chat' ? 'block' : 'none' }}>
-                        <ChatInterface />
-                    </div>
-                    <div style={{ display: activeTab === 'memory' ? 'block' : 'none', height: '100%' }}>
-                        <MemoryView />
-                    </div>
+                    <Suspense fallback={
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
+                            <Loader2 className="spin" size={32} />
+                        </div>
+                    }>
+                        <div style={{ display: activeTab === 'research' ? 'block' : 'none' }}>
+                            <ResearchView />
+                        </div>
+                        <div style={{ display: activeTab === 'chat' ? 'block' : 'none' }}>
+                            <ChatInterface />
+                        </div>
+                        {/*
+                          Performance Optimization:
+                          Conditionally render MemoryView only when active.
+                          This unmounts the heavy WebGL context (react-force-graph) when not in use,
+                          saving significant GPU/CPU resources.
+                        */}
+                        {activeTab === 'memory' && (
+                            <div style={{ height: '100%' }}>
+                                <MemoryView />
+                            </div>
+                        )}
+                    </Suspense>
                 </div>
             </main>
+            <style>{`
+                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                .spin { animation: spin 1s linear infinite; }
+            `}</style>
         </div>
     );
 }

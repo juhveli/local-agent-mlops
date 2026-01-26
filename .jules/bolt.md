@@ -23,3 +23,7 @@
 ## 2024-05-24 - PDF Ingestion Latency
 **Learning:** `PDFIngestor.process` was extracting content from pages sequentially. Since Vision LLM calls are I/O bound and slow (e.g., 2-5s per page), this caused poor user experience for multi-page documents (linear scaling).
 **Action:** Parallelized page extraction using `ThreadPoolExecutor` (max_workers=5). This reduced processing time for a 10-page document from ~5s to ~1s (5x speedup) in simulations. Use thread pools for parallelizing blocking I/O tasks in synchronous code paths.
+
+## 2024-05-24 - Frontend Bundle Size & WebGL Overhead
+**Learning:** `apps/ui` main bundle was 1.6MB because `react-force-graph-3d` (and `three.js`) was imported statically. Also, keeping the 3D graph mounted but hidden (`display: none`) keeps the WebGL context active, consuming GPU resources.
+**Action:** Implemented `React.lazy` to split the bundle (main chunk -> 36KB). Conditionally rendered `MemoryView` to unmount the WebGL context when not in use. Always lazy load heavy visualization libraries and unmount them when hidden.
