@@ -105,7 +105,7 @@ def upload_file(file: UploadFile = File(...)):
         file.file.close()
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+def chat(request: ChatRequest):
     """
     Send a message to the GraphRAG chat agent.
     """
@@ -128,7 +128,7 @@ async def clear_chat():
 
 
 @app.get("/api/memory/graph")
-async def get_memory_graph():
+def get_memory_graph():
     """
     Fetch knowledge graph data for visualization.
     Returns nodes and links from NornicDB.
@@ -140,8 +140,8 @@ async def get_memory_graph():
         if nornic_client.use_fallback:
             # Fallback: Load from JSON file
             import json
-            if os.path.exists(client.fallback_file):
-                with open(client.fallback_file, "r") as f:
+            if os.path.exists(nornic_client.fallback_file):
+                with open(nornic_client.fallback_file, "r") as f:
                     data = json.load(f)
                 for i, item in enumerate(data):
                     nodes.append({
