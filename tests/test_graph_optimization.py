@@ -40,7 +40,7 @@ async def test_get_memory_graph_performance_logic():
         client.qdrant.scroll.return_value = [points, None]
 
         # Now run the function
-        result = await get_memory_graph()
+        result = get_memory_graph()
 
         links = result["links"]
         nodes = result["nodes"]
