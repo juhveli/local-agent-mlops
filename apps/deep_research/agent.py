@@ -71,6 +71,7 @@ class DeepResearchAgent:
         # NornicDB (Qdrant interface) - optional
         self.qdrant = None
         self.collection = "research_knowledge_v2"
+        self.background_tasks = set()
         self._init_qdrant()
 
     def _init_qdrant(self):
@@ -409,15 +410,14 @@ ANSWER:"""
             
                 # Step 3: Store ONLY NEW sources in NornicDB
                 # Optimization: Only process newly found sources to avoid redundant embeddings
-                store_tasks = []
                 for src in new_sources:
                     if src.get("content"):
-                        store_tasks.append(
+                        # Fire and forget storage to avoid blocking research flow
+                        task = asyncio.create_task(
                             self.store_knowledge(src["content"][:5000], {"url": src["url"], "query": query})
                         )
-
-                if store_tasks:
-                    await asyncio.gather(*store_tasks)
+                        self.background_tasks.add(task)
+                        task.add_done_callback(self.background_tasks.discard)
             
             # Step 4: Check if we have enough relevant sources
             if len(all_sources) >= 5:
