@@ -6,6 +6,10 @@ from unittest.mock import MagicMock, patch, AsyncMock
 # Add root to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Mock phoenix to avoid connection errors
+sys.modules["phoenix"] = MagicMock()
+sys.modules["phoenix.otel"] = MagicMock()
+
 from apps.deep_research.agent import DeepResearchAgent
 
 async def test_agent_params():
