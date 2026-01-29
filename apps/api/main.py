@@ -105,11 +105,12 @@ def upload_file(file: UploadFile = File(...)):
         file.file.close()
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+def chat(request: ChatRequest):
     """
     Send a message to the GraphRAG chat agent.
     """
     try:
+        # Run in threadpool since chat_agent.chat is synchronous and blocking
         response = chat_agent.chat(request.message)
         return ChatResponse(
             message=response,
@@ -128,10 +129,11 @@ async def clear_chat():
 
 
 @app.get("/api/memory/graph")
-async def get_memory_graph():
+def get_memory_graph():
     """
     Fetch knowledge graph data for visualization.
     Returns nodes and links from NornicDB.
+    Runs in threadpool to avoid blocking event loop during DB calls.
     """
     try:
         nodes = []

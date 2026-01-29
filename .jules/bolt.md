@@ -23,3 +23,7 @@
 ## 2024-05-24 - PDF Ingestion Latency
 **Learning:** `PDFIngestor.process` was extracting content from pages sequentially. Since Vision LLM calls are I/O bound and slow (e.g., 2-5s per page), this caused poor user experience for multi-page documents (linear scaling).
 **Action:** Parallelized page extraction using `ThreadPoolExecutor` (max_workers=5). This reduced processing time for a 10-page document from ~5s to ~1s (5x speedup) in simulations. Use thread pools for parallelizing blocking I/O tasks in synchronous code paths.
+
+## 2024-05-24 - FastAPI Event Loop Blocking
+**Learning:** The `chat` and `get_memory_graph` endpoints in `apps/api/main.py` were defined as `async def` but performed synchronous blocking operations (LLM calls via `ChatAgent` and Neo4j queries). This blocked the main asyncio event loop, preventing concurrent request processing.
+**Action:** Changed these endpoints to `def` (synchronous). FastAPI runs synchronous path operation functions in a separate thread pool, preventing them from blocking the event loop and improving concurrency.
