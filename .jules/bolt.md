@@ -27,3 +27,7 @@
 ## 2024-05-24 - FastAPI Event Loop Blocking
 **Learning:** The `chat` and `get_memory_graph` endpoints in `apps/api/main.py` were defined as `async def` but performed synchronous blocking operations (LLM calls via `ChatAgent` and Neo4j queries). This blocked the main asyncio event loop, preventing concurrent request processing.
 **Action:** Changed these endpoints to `def` (synchronous). FastAPI runs synchronous path operation functions in a separate thread pool, preventing them from blocking the event loop and improving concurrency.
+
+## 2024-05-24 - Frontend Bundle Optimization
+**Learning:** `MemoryView` imported `react-force-graph-3d` (and `three.js`) directly, causing the initial bundle size to include ~1.3MB of 3D libraries even if the user never visited the Memory tab. This slowed down initial load for all users.
+**Action:** Implemented `React.lazy` and `Suspense` for `MemoryView` and unmounted it when inactive. This reduced the main bundle size by ~80% (from ~1.6MB to ~330kB). Always use lazy loading for heavy, non-critical routes/components.
