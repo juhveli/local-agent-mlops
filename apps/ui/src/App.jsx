@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import ResearchView from './components/ResearchView';
 import ChatInterface from './components/ChatInterface';
-import MemoryView from './components/MemoryView';
 import { LayoutDashboard, MessageSquare, Database } from 'lucide-react';
+
+const MemoryView = React.lazy(() => import('./components/MemoryView'));
 
 // TODO: Add persistent history for research sessions (save/load results).
 // TODO: Add unit tests for frontend components using Vitest/Jest.
@@ -78,9 +79,13 @@ function App() {
                     <div style={{ display: activeTab === 'chat' ? 'block' : 'none' }}>
                         <ChatInterface />
                     </div>
-                    <div style={{ display: activeTab === 'memory' ? 'block' : 'none', height: '100%' }}>
-                        <MemoryView />
-                    </div>
+                    {activeTab === 'memory' && (
+                        <div style={{ height: '100%' }}>
+                            <Suspense fallback={<div style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>Loading 3D Graph...</div>}>
+                                <MemoryView />
+                            </Suspense>
+                        </div>
+                    )}
                 </div>
             </main>
         </div>
