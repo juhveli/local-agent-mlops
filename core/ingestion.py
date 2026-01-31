@@ -56,22 +56,29 @@ class PDFIngestor:
         span.set_attribute("ingest.chunk_count", len(chunks))
 
         # 4. Embed and Store
-        count = 0
-        for i, chunk in enumerate(chunks):
+        # Optimization: Parallelize embedding generation and batch upsert
+        def process_chunk(args):
+            i, chunk = args
             embedding = get_embedding(chunk)
             metadata = {
                 "source": filename,
                 "url": f"file://{filename}", # Virtual URL
                 "chunk_index": i,
-                "type": "pdf_ingestion"
+                "type": "pdf_ingestion",
+                "id": f"{filename}_{i}"
             }
-            # Use hash of content + filename as ID to allow re-ingestion updates
-            doc_id = f"{filename}_{i}"
+            return {
+                "content": chunk,
+                "vector": embedding,
+                "metadata": metadata
+            }
 
-            self.nornic_client.upsert_knowledge(chunk, embedding, metadata)
-            count += 1
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            items_to_upsert = list(executor.map(process_chunk, enumerate(chunks)))
 
-        return count
+        self.nornic_client.upsert_knowledge_batch(items_to_upsert)
+
+        return len(items_to_upsert)
 
     def _pdf_to_images(self, file_bytes: bytes) -> List[str]:
         """Convert PDF bytes to list of base64 PNG strings."""
