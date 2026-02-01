@@ -27,3 +27,7 @@
 ## 2024-05-24 - FastAPI Event Loop Blocking
 **Learning:** The `chat` and `get_memory_graph` endpoints in `apps/api/main.py` were defined as `async def` but performed synchronous blocking operations (LLM calls via `ChatAgent` and Neo4j queries). This blocked the main asyncio event loop, preventing concurrent request processing.
 **Action:** Changed these endpoints to `def` (synchronous). FastAPI runs synchronous path operation functions in a separate thread pool, preventing them from blocking the event loop and improving concurrency.
+
+## 2024-05-25 - React 3D Graph Bundle Splitting
+**Learning:** `MemoryView` imports `react-force-graph-3d` (wrapping Three.js), which added ~1.3MB (uncompressed) to the initial bundle. Since `App.jsx` rendered all tabs (hidden) on mount to preserve state, this cost was paid by all users even if they never opened the graph.
+**Action:** Implemented "Conditional Lazy Loading" pattern: `const MemoryView = React.lazy(...)` combined with a state flag `memoryViewInitialized`. The component is only mounted (and the chunk fetched) when the user *first* clicks the tab. After that, it remains mounted (hidden) to preserve WebGL state. This reduced initial bundle size by ~80%.
