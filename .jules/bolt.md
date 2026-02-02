@@ -27,3 +27,7 @@
 ## 2024-05-24 - FastAPI Event Loop Blocking
 **Learning:** The `chat` and `get_memory_graph` endpoints in `apps/api/main.py` were defined as `async def` but performed synchronous blocking operations (LLM calls via `ChatAgent` and Neo4j queries). This blocked the main asyncio event loop, preventing concurrent request processing.
 **Action:** Changed these endpoints to `def` (synchronous). FastAPI runs synchronous path operation functions in a separate thread pool, preventing them from blocking the event loop and improving concurrency.
+
+## 2024-05-25 - Frontend Lazy Loading
+**Learning:** `MemoryView` was being eagerly loaded in `App.jsx`, causing `react-force-graph-3d` and `three.js` to trigger a massive initial download and an API call to `/api/memory/graph` even on the Research tab.
+**Action:** Implemented `React.lazy` + `Suspense` for `MemoryView`. Used a `memoryViewInitialized` state flag to only mount (and thus fetch data for) the component when the user first clicks the tab. This defers ~5MB+ of JS and 1 API call until needed.
