@@ -1,14 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import ResearchView from './components/ResearchView';
 import ChatInterface from './components/ChatInterface';
-import MemoryView from './components/MemoryView';
-import { LayoutDashboard, MessageSquare, Database } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Database, Loader2 } from 'lucide-react';
+
+// Bolt: Lazy load MemoryView to reduce initial bundle size and avoid
+// fetching heavy 3D libraries (Three.js) and API calls until necessary.
+const MemoryView = lazy(() => import('./components/MemoryView'));
 
 // TODO: Add persistent history for research sessions (save/load results).
 // TODO: Add unit tests for frontend components using Vitest/Jest.
 
 function App() {
     const [activeTab, setActiveTab] = useState('research');
+    const [memoryViewInitialized, setMemoryViewInitialized] = useState(false);
+
+    const handleTabChange = (tab) => {
+        setActiveTab(tab);
+        if (tab === 'memory' && !memoryViewInitialized) {
+            setMemoryViewInitialized(true);
+        }
+    };
 
     return (
         <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -29,7 +40,7 @@ function App() {
 
                 <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <button
-                        onClick={() => setActiveTab('research')}
+                        onClick={() => handleTabChange('research')}
                         style={{
                             display: 'flex', alignItems: 'center', gap: '0.75rem',
                             padding: '0.75rem', borderRadius: '8px',
@@ -42,7 +53,7 @@ function App() {
                     </button>
 
                     <button
-                        onClick={() => setActiveTab('chat')}
+                        onClick={() => handleTabChange('chat')}
                         style={{
                             display: 'flex', alignItems: 'center', gap: '0.75rem',
                             padding: '0.75rem', borderRadius: '8px',
@@ -55,7 +66,7 @@ function App() {
                     </button>
 
                     <button
-                        onClick={() => setActiveTab('memory')}
+                        onClick={() => handleTabChange('memory')}
                         style={{
                             display: 'flex', alignItems: 'center', gap: '0.75rem',
                             padding: '0.75rem', borderRadius: '8px',
@@ -79,7 +90,17 @@ function App() {
                         <ChatInterface />
                     </div>
                     <div style={{ display: activeTab === 'memory' ? 'block' : 'none', height: '100%' }}>
-                        <MemoryView />
+                        {memoryViewInitialized && (
+                            <Suspense fallback={
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
+                                    <Loader2 className="spin" size={48} style={{ marginBottom: '1rem' }} />
+                                    <p>Loading 3D Engine...</p>
+                                    <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } .spin { animation: spin 1s linear infinite; }`}</style>
+                                </div>
+                            }>
+                                <MemoryView />
+                            </Suspense>
+                        )}
                     </div>
                 </div>
             </main>
