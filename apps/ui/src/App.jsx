@@ -1,14 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import ResearchView from './components/ResearchView';
 import ChatInterface from './components/ChatInterface';
-import MemoryView from './components/MemoryView';
-import { LayoutDashboard, MessageSquare, Database } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Database, Loader2 } from 'lucide-react';
+
+const MemoryView = React.lazy(() => import('./components/MemoryView'));
 
 // TODO: Add persistent history for research sessions (save/load results).
 // TODO: Add unit tests for frontend components using Vitest/Jest.
 
 function App() {
     const [activeTab, setActiveTab] = useState('research');
+    const [memoryViewInitialized, setMemoryViewInitialized] = useState(false);
+
+    useEffect(() => {
+        if (activeTab === 'memory' && !memoryViewInitialized) {
+            setMemoryViewInitialized(true);
+        }
+    }, [activeTab, memoryViewInitialized]);
 
     return (
         <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -79,7 +87,18 @@ function App() {
                         <ChatInterface />
                     </div>
                     <div style={{ display: activeTab === 'memory' ? 'block' : 'none', height: '100%' }}>
-                        <MemoryView />
+                        {memoryViewInitialized && (
+                            <Suspense fallback={
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <Loader2 className="spin" size={48} style={{ marginBottom: '1rem' }} />
+                                        <p>Loading 3D Engine...</p>
+                                    </div>
+                                </div>
+                            }>
+                                <MemoryView />
+                            </Suspense>
+                        )}
                     </div>
                 </div>
             </main>
