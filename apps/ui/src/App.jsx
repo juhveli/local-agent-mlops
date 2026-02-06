@@ -1,14 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import ResearchView from './components/ResearchView';
 import ChatInterface from './components/ChatInterface';
-import MemoryView from './components/MemoryView';
-import { LayoutDashboard, MessageSquare, Database } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Database, Loader2 } from 'lucide-react';
+
+// Lazy load the heavy MemoryView component (contains 3D graph libraries)
+const MemoryView = React.lazy(() => import('./components/MemoryView'));
 
 // TODO: Add persistent history for research sessions (save/load results).
 // TODO: Add unit tests for frontend components using Vitest/Jest.
 
 function App() {
     const [activeTab, setActiveTab] = useState('research');
+    const [memoryViewInitialized, setMemoryViewInitialized] = useState(false);
+
+    const handleTabChange = (tab) => {
+        setActiveTab(tab);
+        if (tab === 'memory' && !memoryViewInitialized) {
+            setMemoryViewInitialized(true);
+        }
+    };
 
     return (
         <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -29,7 +39,7 @@ function App() {
 
                 <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <button
-                        onClick={() => setActiveTab('research')}
+                        onClick={() => handleTabChange('research')}
                         style={{
                             display: 'flex', alignItems: 'center', gap: '0.75rem',
                             padding: '0.75rem', borderRadius: '8px',
@@ -42,7 +52,7 @@ function App() {
                     </button>
 
                     <button
-                        onClick={() => setActiveTab('chat')}
+                        onClick={() => handleTabChange('chat')}
                         style={{
                             display: 'flex', alignItems: 'center', gap: '0.75rem',
                             padding: '0.75rem', borderRadius: '8px',
@@ -55,7 +65,7 @@ function App() {
                     </button>
 
                     <button
-                        onClick={() => setActiveTab('memory')}
+                        onClick={() => handleTabChange('memory')}
                         style={{
                             display: 'flex', alignItems: 'center', gap: '0.75rem',
                             padding: '0.75rem', borderRadius: '8px',
@@ -79,7 +89,16 @@ function App() {
                         <ChatInterface />
                     </div>
                     <div style={{ display: activeTab === 'memory' ? 'block' : 'none', height: '100%' }}>
-                        <MemoryView />
+                        {memoryViewInitialized && (
+                            <Suspense fallback={
+                                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: 'var(--text-secondary)' }}>
+                                    <Loader2 size={48} className="spin" style={{ marginBottom: '1rem' }} />
+                                    <p>Loading 3D Engine...</p>
+                                </div>
+                            }>
+                                <MemoryView />
+                            </Suspense>
+                        )}
                     </div>
                 </div>
             </main>
