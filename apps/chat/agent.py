@@ -3,6 +3,7 @@ GraphRAG Chat Agent - Knowledge-grounded conversational AI.
 """
 import os
 import sys
+import asyncio
 from typing import List, Dict, Any
 from opentelemetry import trace
 
@@ -22,6 +23,7 @@ class ChatAgent:
 
     def __init__(self):
         self.conversation_history: List[Dict[str, str]] = []
+        self.last_response_id: str = None
         self.nornic = NornicClient()
         self.system_prompt = """You are a helpful AI assistant with access to a knowledge base.
 When answering questions, use the provided context from the knowledge base when relevant.
@@ -30,7 +32,7 @@ Be concise and helpful. Format responses in Markdown when appropriate."""
 
     @tracer.start_as_current_span("chat_retrieve_context")
     def _retrieve_context(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Retrieve relevant documents from NornicDB based on the query."""
+        """Retrieve relevant documents from NornicDB based on the query. Blocking."""
         span = trace.get_current_span()
         span.set_attribute("chat.query", query)
 
@@ -44,6 +46,7 @@ Be concise and helpful. Format responses in Markdown when appropriate."""
             return []
 
         # Embed query and search
+        # Note: get_embedding is sync (network I/O), running in thread via parent call
         query_vector = get_embedding(query)
         results = self.nornic.hybrid_search(query_vector, limit=limit)
 
@@ -51,7 +54,7 @@ Be concise and helpful. Format responses in Markdown when appropriate."""
         return results
 
     @tracer.start_as_current_span("chat_generate")
-    def chat(self, user_message: str) -> str:
+    async def chat(self, user_message: str) -> str:
         """
         Process a user message and return an AI response.
         """
@@ -61,8 +64,8 @@ Be concise and helpful. Format responses in Markdown when appropriate."""
         # 1. Add user message to history
         self.conversation_history.append({"role": "user", "content": user_message})
         
-        # 2. Retrieve relevant context
-        context_docs = self._retrieve_context(user_message)
+        # 2. Retrieve relevant context (Run in thread to avoid blocking)
+        context_docs = await asyncio.to_thread(self._retrieve_context, user_message)
         
         # 3. Build context string
         context_str = ""
@@ -85,31 +88,41 @@ Be concise and helpful. Format responses in Markdown when appropriate."""
             messages.append(msg)
         
         # 5. Generate response
-        response = generate_response(messages)
+        response_content, response_id = await generate_response(
+            messages,
+            previous_response_id=self.last_response_id
+        )
         
+        # Update state
+        if response_id:
+            self.last_response_id = response_id
+
         # 6. Add assistant response to history
-        self.conversation_history.append({"role": "assistant", "content": response})
+        self.conversation_history.append({"role": "assistant", "content": response_content})
         
-        span.set_attribute("chat.response_length", len(response))
-        return response
+        span.set_attribute("chat.response_length", len(response_content))
+        return response_content
 
     def clear_history(self):
         """Clear conversation history."""
         self.conversation_history = []
+        self.last_response_id = None
 
 
 if __name__ == "__main__":
     # Test the chat agent
     from core.observability import init_observability
-    init_observability("chat-agent-test")
+    init_observability()
 
-    agent = ChatAgent()
+    async def main():
+        agent = ChatAgent()
+        print("ChatAgent initialized. Type 'quit' to exit.\n")
+        while True:
+            # simple input loop (blocking input, but okay for test script)
+            user_input = input("You: ")
+            if user_input.lower() == "quit":
+                break
+            response = await agent.chat(user_input)
+            print(f"\nAssistant: {response}\n")
 
-    # Simulate a conversation
-    print("ChatAgent initialized. Type 'quit' to exit.\n")
-    while True:
-        user_input = input("You: ")
-        if user_input.lower() == "quit":
-            break
-        response = agent.chat(user_input)
-        print(f"\nAssistant: {response}\n")
+    asyncio.run(main())

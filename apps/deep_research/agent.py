@@ -9,11 +9,11 @@ from typing import List, Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from openai import AsyncOpenAI
 from opentelemetry import trace
 from tavily import TavilyClient
 from duckduckgo_search import DDGS
 from dotenv import load_dotenv
+from core.inference import get_shared_inference_client
 
 load_dotenv()
 
@@ -51,10 +51,8 @@ class DeepResearchAgent:
 
     def __init__(self):
         # LLM Client (LM Studio) - Async for non-blocking operations
-        self.llm = AsyncOpenAI(
-            base_url=os.getenv("LM_STUDIO_URL", "http://localhost:1234/v1"),
-            api_key="lm-studio"
-        )
+        # Use shared client to reuse connection pool
+        self.llm = get_shared_inference_client().client
         self.model = os.getenv("MODEL_NAME", "qwen3-30b-a3b-thinking-2507-mlx")
         
         # Tavily Search
