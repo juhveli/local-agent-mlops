@@ -1,13 +1,13 @@
 import os
 import fitz  # pymupdf
 import base64
+import asyncio
 from typing import List, Dict, Any
 from core.inference import InferenceClient
 from core.embeddings import get_embedding
 from core.nornic_client import NornicClient
 from core.observability import get_tracer
 from opentelemetry import trace
-from concurrent.futures import ThreadPoolExecutor
 
 tracer = get_tracer("ingestion")
 
@@ -24,52 +24,64 @@ class PDFIngestor:
         self.vision_model = os.getenv("VISION_MODEL_NAME", "qwen3-vl")
 
     @tracer.start_as_current_span("process_pdf")
-    def process(self, file_bytes: bytes, filename: str) -> int:
+    async def process(self, file_bytes: bytes, filename: str) -> int:
         """
         Process a PDF file and return the number of chunks ingested.
-        Blocking method - run in threadpool if calling from async context.
+        Async method - leverages parallel inference requests.
         """
         span = trace.get_current_span()
         span.set_attribute("ingest.filename", filename)
 
-        # 1. Convert PDF pages to images
-        images_b64 = self._pdf_to_images(file_bytes)
+        # 1. Convert PDF pages to images (CPU bound - run in thread)
+        images_b64 = await asyncio.to_thread(self._pdf_to_images, file_bytes)
         span.set_attribute("ingest.page_count", len(images_b64))
 
         all_text = ""
 
         # 2. Extract content using Vision LLM
         # Optimization: Parallelize extraction to reduce total latency
-        def process_page_wrapper(args):
-            index, img_b64 = args
-            return self._extract_content(img_b64, index + 1)
-
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            # map maintains the order of results corresponding to the input iterator
-            page_texts = list(executor.map(process_page_wrapper, enumerate(images_b64)))
+        # With AsyncInferenceClient, we can fire off multiple requests
+        tasks = [self._extract_content(img, i + 1) for i, img in enumerate(images_b64)]
+        page_texts = await asyncio.gather(*tasks)
 
         for i, page_text in enumerate(page_texts):
             all_text += f"\n\n--- Page {i+1} ---\n\n{page_text}"
 
-        # 3. Chunk text
+        # 3. Chunk text (CPU bound, fast enough to run in main thread or offload if very large)
         chunks = self._chunk_text(all_text)
         span.set_attribute("ingest.chunk_count", len(chunks))
 
         # 4. Embed and Store
+        # Since upsert and embedding are sync network calls, we offload them to threads
+        # We can also parallelize this if order doesn't strictly matter, but keeping order is nice for simple logic
         count = 0
-        for i, chunk in enumerate(chunks):
-            embedding = get_embedding(chunk)
+
+        # Parallelize embedding generation and storage?
+        # Maybe chunk them. For now, sequential async processing of chunks is safer/simpler.
+
+        async def process_chunk(index, chunk_text):
+            # Run get_embedding in thread
+            embedding = await asyncio.to_thread(get_embedding, chunk_text)
             metadata = {
                 "source": filename,
                 "url": f"file://{filename}", # Virtual URL
-                "chunk_index": i,
+                "chunk_index": index,
                 "type": "pdf_ingestion"
             }
             # Use hash of content + filename as ID to allow re-ingestion updates
-            doc_id = f"{filename}_{i}"
+            # doc_id is handled in upsert_knowledge based on content hash usually, or passed in metadata?
+            # NornicClient generates ID if not passed in metadata["id"]?
+            # Let's pass ID in metadata to be safe and deterministic
+            metadata["id"] = f"{filename}_{index}"
 
-            self.nornic_client.upsert_knowledge(chunk, embedding, metadata)
-            count += 1
+            # Run upsert in thread
+            await asyncio.to_thread(self.nornic_client.upsert_knowledge, chunk_text, embedding, metadata)
+            return 1
+
+        # We can run chunk processing in parallel too
+        chunk_tasks = [process_chunk(i, chunk) for i, chunk in enumerate(chunks)]
+        results = await asyncio.gather(*chunk_tasks)
+        count = sum(results)
 
         return count
 
@@ -85,7 +97,7 @@ class PDFIngestor:
         return images
 
     @tracer.start_as_current_span("vision_extract")
-    def _extract_content(self, image_b64: str, page_num: int) -> str:
+    async def _extract_content(self, image_b64: str, page_num: int) -> str:
         """Send image to Vision LLM to extract text."""
         prompt_content = [
             {
@@ -101,7 +113,8 @@ class PDFIngestor:
         ]
 
         try:
-            content, _ = self.inference_client.chat(
+            # Async chat call
+            content, _, _ = await self.inference_client.chat(
                 prompt=prompt_content,
                 system_prompt="You are a precise document digitization assistant.",
                 model=self.vision_model
